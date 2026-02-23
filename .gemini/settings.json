@@ -1,0 +1,22 @@
+{
+    "tools": {
+        "allowed": [
+            "write_file",
+            "replace",
+            "run_shell_command(cat)",
+            "run_shell_command(echo)",
+            "run_shell_command(ls)",
+            "run_shell_command(pwd)",
+            "run_shell_command(cd)",
+            "run_shell_command(cp)",
+            "run_shell_command(mv)",
+            "run_shell_command(chmod)",
+            "run_shell_command(chown)",
+            "run_shell_command(touch)",
+            "run_shell_command(rm)",
+            "run_shell_command(mkdir)",
+            "run_shell_command(rmdir)",
+            "run_shell_command(npm)"
+        ]
+    }
+}
