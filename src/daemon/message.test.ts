@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handleUserMessage } from './queue.js';
+import { handleUserMessage } from './message.js';
 import * as chats from '../shared/chats.js';
 import { EventEmitter } from 'node:events';
 import { spawn } from 'node:child_process';
@@ -20,6 +20,24 @@ describe('Daemon Execution Queue', () => {
     vi.clearAllMocks();
   });
 
+  const runCommandCallback = async ({ command, cwd, env }: any) => {
+    return new Promise<void>((resolve) => {
+      const p = spawn(command, { shell: true, cwd, env });
+      let stdout = '';
+      let stderr = '';
+      if (p.stdout) p.stdout.on('data', (data: any) => stdout += data.toString());
+      if (p.stderr) p.stderr.on('data', (data: any) => stderr += data.toString());
+      p.on('close', async (code: any) => {
+        await chats.appendMessage('chat1', { role: 'log', content: stdout, stderr, timestamp: new Date().toISOString(), command, cwd, exitCode: code ?? 1 });
+        resolve();
+      });
+      p.on('error', async (err: any) => {
+        await chats.appendMessage('chat1', { role: 'log', content: '', stderr: err.toString(), timestamp: new Date().toISOString(), command, cwd, exitCode: 1 });
+        resolve();
+      });
+    });
+  };
+
   it('runs sequentially for the same directory', async () => {
     const mockSpawn = vi.fn().mockImplementation((_cmd, _options) => {
       const emitter = new EventEmitter() as any;
@@ -38,14 +56,14 @@ describe('Daemon Execution Queue', () => {
 
     const settings = { chats: { new: 'echo msg' } };
     
-    const p1 = handleUserMessage('chat1', 'msg1', settings, '/dir1');
+    const p1 = handleUserMessage('chat1', 'msg1', settings as any, '/dir1', false, runCommandCallback);
     
     await new Promise(r => setTimeout(r, 0));
     
     const emitter1 = (mockSpawn as any).lastEmitter;
     expect(mockSpawn).toHaveBeenCalledTimes(1);
 
-    const p2 = handleUserMessage('chat1', 'msg2', settings, '/dir1');
+    const p2 = handleUserMessage('chat1', 'msg2', settings as any, '/dir1', false, runCommandCallback);
     
     await new Promise(r => setTimeout(r, 0));
     
@@ -83,11 +101,11 @@ describe('Daemon Execution Queue', () => {
 
     const settings = { chats: { new: 'echo msg' } };
     
-    handleUserMessage('chat1', 'msg1', settings, '/dir1');
+    handleUserMessage('chat1', 'msg1', settings as any, '/dir1', false, runCommandCallback);
     await new Promise(r => setTimeout(r, 0));
     expect(mockSpawn).toHaveBeenCalledTimes(1);
 
-    handleUserMessage('chat1', 'msg2', settings, '/dir2');
+    handleUserMessage('chat1', 'msg2', settings as any, '/dir2', false, runCommandCallback);
     await new Promise(r => setTimeout(r, 0));
     
     // Since it's a different directory, it should spawn immediately
@@ -115,10 +133,10 @@ describe('Daemon Execution Queue', () => {
 
     const settings = { chats: { new: 'echo msg' } };
     
-    const p1 = handleUserMessage('chat1', 'msg1', settings, '/dir-fail');
+    const p1 = handleUserMessage('chat1', 'msg1', settings as any, '/dir-fail', false, runCommandCallback);
     await new Promise(r => setTimeout(r, 0));
     
-    const p2 = handleUserMessage('chat1', 'msg2', settings, '/dir-fail');
+    const p2 = handleUserMessage('chat1', 'msg2', settings as any, '/dir-fail', false, runCommandCallback);
     
     const emitter1 = (mockSpawn as any).emitters[0];
     emitter1.fail(new Error('command not found'));

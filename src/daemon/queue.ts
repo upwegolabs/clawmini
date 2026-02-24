@@ -1,9 +1,6 @@
-import { spawn } from 'node:child_process';
-import { appendMessage, type UserMessage, type CommandLogMessage } from '../shared/chats.js';
-
 type Task = () => Promise<void>;
 
-class DirectoryQueue {
+export class Queue {
   private queue: Promise<void> = Promise.resolve();
 
   enqueue(task: Task): Promise<void> {
@@ -13,92 +10,11 @@ class DirectoryQueue {
   }
 }
 
-const queues = new Map<string, DirectoryQueue>();
+const directoryQueues = new Map<string, Queue>();
 
-export function getQueue(dir: string): DirectoryQueue {
-  if (!queues.has(dir)) {
-    queues.set(dir, new DirectoryQueue());
+export function getQueue(dir: string): Queue {
+  if (!directoryQueues.has(dir)) {
+    directoryQueues.set(dir, new Queue());
   }
-  return queues.get(dir)!;
-}
-
-export async function handleUserMessage(chatId: string, message: string, settings: { chats?: { new?: string; [key: string]: unknown }; [key: string]: unknown } | undefined, cwd: string = process.cwd(), noWait: boolean = false): Promise<void> {
-  // TODO: Immediately persist the user message somewhere (e.g., a crash-recovery log)
-  // before enqueueing it, in case the daemon crashes before processing this queue item.
-
-  if (!settings?.chats?.new) {
-    throw new Error('No chats.new defined in settings.json');
-  }
-
-  const cmd = settings.chats.new;
-  const queue = getQueue(cwd);
-
-  const taskPromise = queue.enqueue(async () => {
-    const userMsg: UserMessage = {
-      role: 'user',
-      content: message,
-      timestamp: new Date().toISOString()
-    };
-    await appendMessage(chatId, userMsg);
-
-    return new Promise<void>((resolve) => {
-      const p = spawn(cmd, {
-        shell: true,
-        cwd,
-        env: {
-          ...process.env,
-          CLAW_CLI_MESSAGE: message,
-        },
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      if (p.stdout) {
-        p.stdout.on('data', (data) => {
-          stdout += data.toString();
-          process.stdout.write(data);
-        });
-      }
-
-      if (p.stderr) {
-        p.stderr.on('data', (data) => {
-          stderr += data.toString();
-          process.stderr.write(data);
-        });
-      }
-
-      p.on('close', async (code) => {
-        const logMsg: CommandLogMessage = {
-          role: 'log',
-          content: stdout,
-          stderr: stderr,
-          timestamp: new Date().toISOString(),
-          command: cmd,
-          cwd,
-          exitCode: code ?? 1,
-        };
-        await appendMessage(chatId, logMsg);
-        resolve();
-      });
-
-      p.on('error', async (err) => {
-        const logMsg: CommandLogMessage = {
-          role: 'log',
-          content: '',
-          stderr: err.toString(),
-          timestamp: new Date().toISOString(),
-          command: cmd,
-          cwd,
-          exitCode: 1,
-        };
-        await appendMessage(chatId, logMsg);
-        resolve();
-      });
-    });
-  });
-
-  if (!noWait) {
-    await taskPromise;
-  }
+  return directoryQueues.get(dir)!;
 }

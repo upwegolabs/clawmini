@@ -1,5 +1,12 @@
 import { Command } from 'commander';
-import { listChats, createChat, deleteChat, setDefaultChatId, getDefaultChatId } from '../../shared/chats.js';
+import {
+  listChats,
+  createChat,
+  deleteChat,
+  setDefaultChatId,
+  getDefaultChatId,
+  DEFAULT_CHAT_ID,
+} from '../../shared/chats.js';
 
 export const chatsCmd = new Command('chats').description('Manage chat sessions');
 
@@ -42,8 +49,13 @@ chatsCmd
   .description('Remove a chat')
   .action(async (id: string) => {
     try {
+      const defaultId = await getDefaultChatId();
       await deleteChat(id);
       console.log(`Chat ${id} deleted successfully.`);
+      if (id === defaultId) {
+        await setDefaultChatId(DEFAULT_CHAT_ID);
+        console.log(`Default chat reset to default.`);
+      }
     } catch (err) {
       console.error('Failed to delete chat:', err instanceof Error ? err.message : String(err));
       process.exit(1);
@@ -58,7 +70,10 @@ chatsCmd
       await setDefaultChatId(id);
       console.log(`Default chat set to ${id}.`);
     } catch (err) {
-      console.error('Failed to set default chat:', err instanceof Error ? err.message : String(err));
+      console.error(
+        'Failed to set default chat:',
+        err instanceof Error ? err.message : String(err)
+      );
       process.exit(1);
     }
   });

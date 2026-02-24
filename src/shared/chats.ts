@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { getClawminiDir, getSettingsPath } from './workspace.js';
 
+export const DEFAULT_CHAT_ID = 'default';
+
 export interface UserMessage {
   role: 'user';
   content: string;
@@ -73,7 +75,7 @@ export async function getMessages(id: string, limit?: number, startDir = process
   const chatsDir = await getChatsDir(startDir);
   const chatFile = path.join(chatsDir, id, 'chat.jsonl');
   if (!existsSync(chatFile)) {
-    return [];
+    throw new Error(`Chat directory or file for '${id}' not found.`);
   }
   const content = await fs.readFile(chatFile, 'utf8');
   const lines = content.split('\n').filter(line => line.trim() !== '');
@@ -87,14 +89,14 @@ export async function getMessages(id: string, limit?: number, startDir = process
 
 export async function getDefaultChatId(startDir = process.cwd()): Promise<string> {
   const settingsPath = getSettingsPath(startDir);
-  if (!existsSync(settingsPath)) return 'default';
+  if (!existsSync(settingsPath)) return DEFAULT_CHAT_ID;
   
   try {
     const content = await fs.readFile(settingsPath, 'utf8');
     const settings = JSON.parse(content);
-    return settings.chats?.defaultId || 'default';
+    return settings.chats?.defaultId || DEFAULT_CHAT_ID;
   } catch {
-    return 'default';
+    return DEFAULT_CHAT_ID;
   }
 }
 
