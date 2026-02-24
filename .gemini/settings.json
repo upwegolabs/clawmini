@@ -17,6 +17,11 @@
             "run_shell_command(mkdir)",
             "run_shell_command(rmdir)",
             "run_shell_command(npm)"
+        ],
+        "exclude": [
+            "ask_user",
+            "save_memory",
+            "write_todos"
         ]
     }
 }
