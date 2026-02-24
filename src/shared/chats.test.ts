@@ -33,7 +33,7 @@ describe('chats utilities', () => {
   it('should create and list chats', async () => {
     await createChat('chat1', TEST_DIR);
     await createChat('chat2', TEST_DIR);
-    
+
     const chats = await listChats(TEST_DIR);
     expect(chats).toContain('chat1');
     expect(chats).toContain('chat2');
@@ -44,7 +44,7 @@ describe('chats utilities', () => {
     await createChat('chat1', TEST_DIR);
     let chats = await listChats(TEST_DIR);
     expect(chats).toContain('chat1');
-    
+
     await deleteChat('chat1', TEST_DIR);
     chats = await listChats(TEST_DIR);
     expect(chats).not.toContain('chat1');
@@ -52,13 +52,13 @@ describe('chats utilities', () => {
 
   it('should append and get messages in JSONL format', async () => {
     await createChat('chat1', TEST_DIR);
-    
+
     const msg1: UserMessage = {
       role: 'user',
       content: 'Hello',
       timestamp: new Date().toISOString(),
     };
-    
+
     const msg2: CommandLogMessage = {
       role: 'log',
       content: 'output',
@@ -68,15 +68,15 @@ describe('chats utilities', () => {
       cwd: '/tmp',
       exitCode: 0,
     };
-    
+
     await appendMessage('chat1', msg1, TEST_DIR);
     await appendMessage('chat1', msg2, TEST_DIR);
-    
+
     const messages = await getMessages('chat1', undefined, TEST_DIR);
     expect(messages.length).toBe(2);
     expect(messages[0]).toEqual(msg1);
     expect(messages[1]).toEqual(msg2);
-    
+
     // Test limit
     const limited = await getMessages('chat1', 1, TEST_DIR);
     expect(limited.length).toBe(1);
@@ -86,7 +86,7 @@ describe('chats utilities', () => {
   it('should manage default chat id in settings.json', async () => {
     let defaultId = await getDefaultChatId(TEST_DIR);
     expect(defaultId).toBe('default'); // fallback
-    
+
     await setDefaultChatId('my-chat', TEST_DIR);
     defaultId = await getDefaultChatId(TEST_DIR);
     expect(defaultId).toBe('my-chat');

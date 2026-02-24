@@ -25,7 +25,7 @@ const AppRouter = router({
     )
     .mutation(async ({ input }) => {
       const message = input.data.message;
-      const chatId = input.data.chatId ?? await getDefaultChatId();
+      const chatId = input.data.chatId ?? (await getDefaultChatId());
       const noWait = input.data.noWait ?? false;
       const settingsPath = getSettingsPath();
 
@@ -37,60 +37,67 @@ const AppRouter = router({
         throw new Error(`Failed to read settings from ${settingsPath}: ${err}`, { cause: err });
       }
 
-      await handleUserMessage(chatId, message, settings, undefined, noWait, async ({ command, cwd, env }) => {
-        return new Promise<void>((resolve) => {
-          const p = spawn(command, {
-            shell: true,
-            cwd,
-            env,
-          });
-
-          let stdout = '';
-          let stderr = '';
-
-          if (p.stdout) {
-            p.stdout.on('data', (data) => {
-              stdout += data.toString();
-              process.stdout.write(data);
-            });
-          }
-
-          if (p.stderr) {
-            p.stderr.on('data', (data) => {
-              stderr += data.toString();
-              process.stderr.write(data);
-            });
-          }
-
-          p.on('close', async (code) => {
-            const logMsg: CommandLogMessage = {
-              role: 'log',
-              content: stdout,
-              stderr: stderr,
-              timestamp: new Date().toISOString(),
-              command,
+      await handleUserMessage(
+        chatId,
+        message,
+        settings,
+        undefined,
+        noWait,
+        async ({ command, cwd, env }) => {
+          return new Promise<void>((resolve) => {
+            const p = spawn(command, {
+              shell: true,
               cwd,
-              exitCode: code ?? 1,
-            };
-            await appendMessage(chatId, logMsg);
-            resolve();
-          });
+              env,
+            });
 
-          p.on('error', async (err) => {
-            const logMsg: CommandLogMessage = {
-              role: 'log',
-              content: '',
-              stderr: err.toString(),
-              timestamp: new Date().toISOString(),
-              command,
-              cwd,
-              exitCode: 1,
-            };
-            await appendMessage(chatId, logMsg);
-            resolve();
+            let stdout = '';
+            let stderr = '';
+
+            if (p.stdout) {
+              p.stdout.on('data', (data) => {
+                stdout += data.toString();
+                process.stdout.write(data);
+              });
+            }
+
+            if (p.stderr) {
+              p.stderr.on('data', (data) => {
+                stderr += data.toString();
+                process.stderr.write(data);
+              });
+            }
+
+            p.on('close', async (code) => {
+              const logMsg: CommandLogMessage = {
+                role: 'log',
+                content: stdout,
+                stderr: stderr,
+                timestamp: new Date().toISOString(),
+                command,
+                cwd,
+                exitCode: code ?? 1,
+              };
+              await appendMessage(chatId, logMsg);
+              resolve();
+            });
+
+            p.on('error', async (err) => {
+              const logMsg: CommandLogMessage = {
+                role: 'log',
+                content: '',
+                stderr: err.toString(),
+                timestamp: new Date().toISOString(),
+                command,
+                cwd,
+                exitCode: 1,
+              };
+              await appendMessage(chatId, logMsg);
+              resolve();
+            });
           });
-        });
-      });
+        }
+      );
 
       return { success: true };
     }),

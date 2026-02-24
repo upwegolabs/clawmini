@@ -99,15 +99,24 @@ describe('E2E CLI Tests', () => {
 
   it('should send a message to a specific chat', async () => {
     await runCli(['chats', 'add', 'specific-chat']);
-    const { stdout, code } = await runCli(['messages', 'send', 'specific chat message', '--chat', 'specific-chat']);
+    const { stdout, code } = await runCli([
+      'messages',
+      'send',
+      'specific chat message',
+      '--chat',
+      'specific-chat',
+    ]);
 
     expect(code).toBe(0);
     expect(stdout).toContain('Message sent successfully.');
 
     // Give daemon time to process
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const chatLog = fs.readFileSync(path.resolve(e2eDir, '.clawmini/chats/specific-chat/chat.jsonl'), 'utf8');
+    const chatLog = fs.readFileSync(
+      path.resolve(e2eDir, '.clawmini/chats/specific-chat/chat.jsonl'),
+      'utf8'
+    );
     expect(chatLog).toContain('specific chat message');
   });
 
@@ -117,7 +126,13 @@ describe('E2E CLI Tests', () => {
     expect(stdout).toContain('[USER]');
     expect(stdout).toContain('specific chat message');
 
-    const { stdout: jsonStdout, code: jsonCode } = await runCli(['messages', 'tail', '--json', '--chat', 'specific-chat']);
+    const { stdout: jsonStdout, code: jsonCode } = await runCli([
+      'messages',
+      'tail',
+      '--json',
+      '--chat',
+      'specific-chat',
+    ]);
     expect(jsonCode).toBe(0);
     expect(jsonStdout).toContain('"role":"user"');
     expect(jsonStdout).toContain('"content":"specific chat message"');
@@ -125,16 +140,26 @@ describe('E2E CLI Tests', () => {
 
   it('should return immediately with --no-wait flag', async () => {
     await runCli(['chats', 'add', 'nowait-chat']);
-    
-    const { stdout, code } = await runCli(['messages', 'send', 'no wait message', '--chat', 'nowait-chat', '--no-wait']);
+
+    const { stdout, code } = await runCli([
+      'messages',
+      'send',
+      'no wait message',
+      '--chat',
+      'nowait-chat',
+      '--no-wait',
+    ]);
 
     expect(code).toBe(0);
     expect(stdout).toContain('Message sent successfully.');
 
     // Give daemon time to process
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const chatLog = fs.readFileSync(path.resolve(e2eDir, '.clawmini/chats/nowait-chat/chat.jsonl'), 'utf8');
+    const chatLog = fs.readFileSync(
+      path.resolve(e2eDir, '.clawmini/chats/nowait-chat/chat.jsonl'),
+      'utf8'
+    );
     expect(chatLog).toContain('no wait message');
   });
 
@@ -143,27 +168,33 @@ describe('E2E CLI Tests', () => {
     const settingsPath = path.resolve(e2eDir, '.clawmini/settings.json');
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
     const oldCmd = settings.chats?.new;
-    
+
     settings.chats = settings.chats || {};
     settings.chats.new = 'sleep 0.2 && echo $CLAW_CLI_MESSAGE';
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
     await runCli(['chats', 'add', 'order-chat']);
-    
+
     // Send two messages consecutively
     await runCli(['messages', 'send', 'first', '--chat', 'order-chat', '--no-wait']);
     await runCli(['messages', 'send', 'second', '--chat', 'order-chat', '--no-wait']);
 
     // Give daemon time to process both
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Restore settings
     settings.chats.new = oldCmd;
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
-    const chatLog = fs.readFileSync(path.resolve(e2eDir, '.clawmini/chats/order-chat/chat.jsonl'), 'utf8');
-    const lines = chatLog.trim().split('\n').map(l => JSON.parse(l));
-    
+    const chatLog = fs.readFileSync(
+      path.resolve(e2eDir, '.clawmini/chats/order-chat/chat.jsonl'),
+      'utf8'
+    );
+    const lines = chatLog
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+
     expect(lines).toHaveLength(4);
     expect(lines[0].role).toBe('user');
     expect(lines[0].content).toBe('first');

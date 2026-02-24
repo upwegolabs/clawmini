@@ -47,7 +47,7 @@ export async function listChats(startDir = process.cwd()): Promise<string[]> {
   const chatsDir = await getChatsDir(startDir);
   try {
     const entries = await fs.readdir(chatsDir, { withFileTypes: true });
-    return entries.filter(e => e.isDirectory()).map(e => e.name);
+    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
   } catch {
     return [];
   }
@@ -61,7 +61,11 @@ export async function deleteChat(id: string, startDir = process.cwd()): Promise<
   }
 }
 
-export async function appendMessage(id: string, message: ChatMessage, startDir = process.cwd()): Promise<void> {
+export async function appendMessage(
+  id: string,
+  message: ChatMessage,
+  startDir = process.cwd()
+): Promise<void> {
   const chatsDir = await getChatsDir(startDir);
   const chatDir = path.join(chatsDir, id);
   if (!existsSync(chatDir)) {
@@ -71,16 +75,20 @@ export async function appendMessage(id: string, message: ChatMessage, startDir =
   await fs.appendFile(chatFile, JSON.stringify(message) + '\n');
 }
 
-export async function getMessages(id: string, limit?: number, startDir = process.cwd()): Promise<ChatMessage[]> {
+export async function getMessages(
+  id: string,
+  limit?: number,
+  startDir = process.cwd()
+): Promise<ChatMessage[]> {
   const chatsDir = await getChatsDir(startDir);
   const chatFile = path.join(chatsDir, id, 'chat.jsonl');
   if (!existsSync(chatFile)) {
     throw new Error(`Chat directory or file for '${id}' not found.`);
   }
   const content = await fs.readFile(chatFile, 'utf8');
-  const lines = content.split('\n').filter(line => line.trim() !== '');
-  const messages = lines.map(line => JSON.parse(line) as ChatMessage);
-  
+  const lines = content.split('\n').filter((line) => line.trim() !== '');
+  const messages = lines.map((line) => JSON.parse(line) as ChatMessage);
+
   if (limit !== undefined && limit > 0) {
     return messages.slice(-limit);
   }
@@ -90,7 +98,7 @@ export async function getMessages(id: string, limit?: number, startDir = process
 export async function getDefaultChatId(startDir = process.cwd()): Promise<string> {
   const settingsPath = getSettingsPath(startDir);
   if (!existsSync(settingsPath)) return DEFAULT_CHAT_ID;
-  
+
   try {
     const content = await fs.readFile(settingsPath, 'utf8');
     const settings = JSON.parse(content);
@@ -102,7 +110,8 @@ export async function getDefaultChatId(startDir = process.cwd()): Promise<string
 
 export async function setDefaultChatId(id: string, startDir = process.cwd()): Promise<void> {
   const settingsPath = getSettingsPath(startDir);
-  let settings: { chats?: { defaultId?: string; [key: string]: unknown }; [key: string]: unknown } = {};
+  let settings: { chats?: { defaultId?: string; [key: string]: unknown }; [key: string]: unknown } =
+    {};
   if (existsSync(settingsPath)) {
     try {
       const content = await fs.readFile(settingsPath, 'utf8');
@@ -111,16 +120,16 @@ export async function setDefaultChatId(id: string, startDir = process.cwd()): Pr
       // Ignore invalid JSON
     }
   }
-  
+
   if (!settings.chats) {
     settings.chats = {};
   }
   settings.chats.defaultId = id;
-  
+
   const clawminiDir = getClawminiDir(startDir);
   if (!existsSync(clawminiDir)) {
     await fs.mkdir(clawminiDir, { recursive: true });
   }
-  
+
   await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
 }
