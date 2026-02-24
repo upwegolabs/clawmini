@@ -1,8 +1,10 @@
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 import fs from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import { getSettingsPath } from '../shared/workspace.js';
+import { handleUserMessage } from './message.js';
+import { getDefaultChatId, appendMessage, type CommandLogMessage } from '../shared/chats.js';
+import { spawn } from 'node:child_process';
 
 const t = initTRPC.create();
 export const router = t.router;
@@ -16,11 +18,15 @@ const AppRouter = router({
         client: z.literal('cli'),
         data: z.object({
           message: z.string(),
+          chatId: z.string().optional(),
+          noWait: z.boolean().optional(),
         }),
       })
     )
     .mutation(async ({ input }) => {
       const message = input.data.message;
+      const chatId = input.data.chatId ?? (await getDefaultChatId());
+      const noWait = input.data.noWait ?? false;
       const settingsPath = getSettingsPath();
 
       let settings;
@@ -31,38 +37,69 @@ const AppRouter = router({
         throw new Error(`Failed to read settings from ${settingsPath}: ${err}`, { cause: err });
       }
 
-      if (!settings?.chats?.new) {
-        throw new Error('No chats.new defined in settings.json');
-      }
+      await handleUserMessage(
+        chatId,
+        message,
+        settings,
+        undefined,
+        noWait,
+        async ({ command, cwd, env }) => {
+          return new Promise<void>((resolve) => {
+            const p = spawn(command, {
+              shell: true,
+              cwd,
+              env,
+            });
 
-      const cmd = settings.chats.new;
+            let stdout = '';
+            let stderr = '';
 
-      console.log(`Executing chat command: ${cmd}`);
+            if (p.stdout) {
+              p.stdout.on('data', (data) => {
+                stdout += data.toString();
+                process.stdout.write(data);
+              });
+            }
 
-      return new Promise((resolve, reject) => {
-        const p = spawn(cmd, {
-          shell: true,
-          stdio: 'inherit',
-          env: {
-            ...process.env,
-            // Pass the message securely via an environment variable to prevent shell injection.
-            // TODO: Add Windows support (e.g., using "%CLAW_CLI_MESSAGE%").
-            CLAW_CLI_MESSAGE: message,
-          },
-        });
+            if (p.stderr) {
+              p.stderr.on('data', (data) => {
+                stderr += data.toString();
+                process.stderr.write(data);
+              });
+            }
 
-        p.on('close', (code) => {
-          if (code === 0) {
-            resolve({ success: true });
-          } else {
-            reject(new Error(`Command exited with code ${code}`));
-          }
-        });
+            p.on('close', async (code) => {
+              const logMsg: CommandLogMessage = {
+                role: 'log',
+                content: stdout,
+                stderr: stderr,
+                timestamp: new Date().toISOString(),
+                command,
+                cwd,
+                exitCode: code ?? 1,
+              };
+              await appendMessage(chatId, logMsg);
+              resolve();
+            });
 
-        p.on('error', (err) => {
-          reject(err);
-        });
-      });
+            p.on('error', async (err) => {
+              const logMsg: CommandLogMessage = {
+                role: 'log',
+                content: '',
+                stderr: err.toString(),
+                timestamp: new Date().toISOString(),
+                command,
+                cwd,
+                exitCode: 1,
+              };
+              await appendMessage(chatId, logMsg);
+              resolve();
+            });
+          });
+        }
+      );
+
+      return { success: true };
     }),
 });
 

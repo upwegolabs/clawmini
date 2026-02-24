@@ -4,3 +4,4 @@
 - **When you need to test CLI instances that spin up background daemon processes**, use fully isolated E2E tests with `node:child_process.spawn` pointing to the pre-compiled `dist/cli/index.mjs` entry point.
 - **When you need to run E2E CLI commands**, always run them in an isolated sandbox temporary directory (`cwd: e2eDir`) to prevent polluting the developer workspace with generated files or daemon logs.
 - **When you need to tear down E2E tests**, explicitly run a cleanup command (e.g., `pkill -f "dist/daemon/index.mjs"`) in the `afterAll` hook to prevent zombie daemon processes from persisting.
+- **When testing code that relies on `node:child_process.spawn`** and passing callbacks for side effects, consider mocking `spawn` inside the test and providing a matching mock implementation of your callback directly in the test suite.
