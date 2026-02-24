@@ -3,8 +3,17 @@ import { z } from 'zod';
 export const SettingsSchema = z.looseObject({
   chats: z
     .looseObject({
-      new: z.string().optional(),
       defaultId: z.string().optional(),
+    })
+    .optional(),
+  defaultAgent: z
+    .looseObject({
+      commands: z
+        .looseObject({
+          new: z.string().optional(),
+        })
+        .optional(),
+      env: z.record(z.string(), z.string()).optional(),
     })
     .optional(),
 });

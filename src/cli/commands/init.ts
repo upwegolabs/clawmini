@@ -15,8 +15,11 @@ export const initCmd = new Command('init')
     }
 
     const defaultSettings = {
-      chats: {
-        new: 'echo $CLAW_CLI_MESSAGE',
+      defaultAgent: {
+        commands: {
+          new: 'echo $CLAW_CLI_MESSAGE',
+        },
+        env: {},
       },
     };
 

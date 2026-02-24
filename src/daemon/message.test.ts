@@ -70,7 +70,7 @@ describe('Daemon Execution Queue', () => {
 
     (spawn as any).mockImplementation(mockSpawn);
 
-    const settings = { chats: { new: 'echo msg' } };
+    const settings = { defaultAgent: { commands: { new: 'echo msg' } } };
 
     const p1 = handleUserMessage(
       'chat1',
@@ -129,7 +129,7 @@ describe('Daemon Execution Queue', () => {
 
     (spawn as any).mockImplementation(mockSpawn);
 
-    const settings = { chats: { new: 'echo msg' } };
+    const settings = { defaultAgent: { commands: { new: 'echo msg' } } };
 
     handleUserMessage('chat1', 'msg1', settings as any, '/dir1', false, runCommandCallback);
     await new Promise((r) => setTimeout(r, 0));
@@ -161,7 +161,7 @@ describe('Daemon Execution Queue', () => {
 
     (spawn as any).mockImplementation(mockSpawn);
 
-    const settings = { chats: { new: 'echo msg' } };
+    const settings = { defaultAgent: { commands: { new: 'echo msg' } } };
 
     const p1 = handleUserMessage(
       'chat1',

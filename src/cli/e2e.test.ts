@@ -167,10 +167,11 @@ describe('E2E CLI Tests', () => {
     // Override settings to simulate a slow command
     const settingsPath = path.resolve(e2eDir, '.clawmini/settings.json');
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    const oldCmd = settings.chats?.new;
+    const oldCmd = settings.defaultAgent?.commands?.new;
 
-    settings.chats = settings.chats || {};
-    settings.chats.new = 'sleep 0.2 && echo $CLAW_CLI_MESSAGE';
+    settings.defaultAgent = settings.defaultAgent || {};
+    settings.defaultAgent.commands = settings.defaultAgent.commands || {};
+    settings.defaultAgent.commands.new = 'sleep 0.2 && echo $CLAW_CLI_MESSAGE';
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
     await runCli(['chats', 'add', 'order-chat']);
@@ -183,7 +184,7 @@ describe('E2E CLI Tests', () => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Restore settings
-    settings.chats.new = oldCmd;
+    settings.defaultAgent.commands.new = oldCmd;
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
     const chatLog = fs.readFileSync(

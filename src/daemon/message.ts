@@ -13,14 +13,15 @@ export async function handleUserMessage(
   // TODO: Immediately persist the user message somewhere (e.g., a crash-recovery log)
   // before enqueueing it, in case the daemon crashes before processing this queue item.
 
-  if (!settings?.chats?.new) {
-    throw new Error('No chats.new defined in settings.json');
+  if (!settings?.defaultAgent?.commands?.new) {
+    throw new Error('No defaultAgent.commands.new defined in settings.json');
   }
 
-  const command = settings.chats.new;
+  const command = settings.defaultAgent.commands.new;
   const queue = getQueue(cwd);
   const env = {
     ...process.env,
+    ...(settings.defaultAgent.env || {}),
     CLAW_CLI_MESSAGE: message,
   } as Record<string, string>;
 

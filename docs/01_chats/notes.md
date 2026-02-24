@@ -1,9 +1,9 @@
 # Notes for Chats Feature
 
 ## Current State of the Codebase
-- **Initialization:** `clawmini init` sets up a workspace by creating a `.clawmini` directory and a `settings.json` file. The settings file currently has a minimal structure: `{ "chats": { "new": "echo $CLAW_CLI_MESSAGE" } }`.
+- **Initialization:** `clawmini init` sets up a workspace by creating a `.clawmini` directory and a `settings.json` file. The settings file currently has a minimal structure: `{ "defaultAgent": { "commands": { "new": "echo $CLAW_CLI_MESSAGE" }, "env": {} } }`.
 - **Client:** The CLI provides `clawmini messages send <message>`. This command communicates with a local background daemon via tRPC over a UNIX domain socket.
-- **Daemon Router:** The daemon receives the message, reads `settings.json`, and spawns the command configured in `chats.new`. The message is passed securely via the `CLAW_CLI_MESSAGE` environment variable.
+- **Daemon Router:** The daemon receives the message, reads `settings.json`, and spawns the command configured in `defaultAgent.commands.new`. The message is passed securely via the `CLAW_CLI_MESSAGE` environment variable.
 - **Missing functionality:** There is no notion of multiple separate chats, no local storage of history, and commands are simply spawned immediately without any directory-based concurrency control.
 
 ## Feature Requirements
