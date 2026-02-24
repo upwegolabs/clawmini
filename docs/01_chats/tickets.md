@@ -39,7 +39,7 @@
 - Verify the CLI output and the creation/deletion of `.clawmini/chats/<id>` directories.
 - Explicitly tear down E2E tests (e.g., `pkill -f "dist/daemon/index.mjs"`) in the `afterAll` hook.
 - Run type-checking (`tsc`) and linter.
-**Status**: not started
+**Status**: complete
 
 ## Step 4: CLI Messaging and History Commands
 **Description**: Update the existing `send` command to support chats and implement the `tail` command for viewing history.

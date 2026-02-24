@@ -100,7 +100,7 @@ export async function getDefaultChatId(startDir = process.cwd()): Promise<string
 
 export async function setDefaultChatId(id: string, startDir = process.cwd()): Promise<void> {
   const settingsPath = getSettingsPath(startDir);
-  let settings: any = {};
+  let settings: { chats?: { defaultId?: string; [key: string]: unknown }; [key: string]: unknown } = {};
   if (existsSync(settingsPath)) {
     try {
       const content = await fs.readFile(settingsPath, 'utf8');
