@@ -11,6 +11,9 @@ export const SettingsSchema = z.looseObject({
       commands: z
         .looseObject({
           new: z.string().optional(),
+          append: z.string().optional(),
+          getSessionId: z.string().optional(),
+          getMessageContent: z.string().optional(),
         })
         .optional(),
       env: z.record(z.string(), z.string()).optional(),
