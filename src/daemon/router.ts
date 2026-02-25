@@ -19,6 +19,7 @@ const AppRouter = router({
         data: z.object({
           message: z.string(),
           chatId: z.string().optional(),
+          sessionId: z.string().optional(),
           noWait: z.boolean().optional(),
         }),
       })

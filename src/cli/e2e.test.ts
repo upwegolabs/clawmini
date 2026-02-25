@@ -120,6 +120,31 @@ describe('E2E CLI Tests', () => {
     expect(chatLog).toContain('specific chat message');
   });
 
+  it('should send a message with a specific session ID', async () => {
+    await runCli(['chats', 'add', 'session-chat']);
+    const { stdout, code } = await runCli([
+      'messages',
+      'send',
+      'session test message',
+      '--chat',
+      'session-chat',
+      '--session',
+      'my-test-session',
+    ]);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain('Message sent successfully.');
+
+    // Give daemon time to process
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const chatLog = fs.readFileSync(
+      path.resolve(e2eDir, '.clawmini/chats/session-chat/chat.jsonl'),
+      'utf8'
+    );
+    expect(chatLog).toContain('session test message');
+  });
+
   it('should view history with tail and --json flag', async () => {
     const { stdout, code } = await runCli(['messages', 'tail', '--chat', 'specific-chat']);
     expect(code).toBe(0);

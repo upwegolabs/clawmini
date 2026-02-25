@@ -8,6 +8,7 @@ messagesCmd
   .command('send <message>')
   .description('Send a new message')
   .option('-c, --chat <id>', 'Specific chat to send the message to')
+  .option('-s, --session <id>', 'Specific session to send the message to')
   .option('--no-wait', 'Return immediately after the server queues the message')
   .action(async (message, options) => {
     try {
@@ -18,6 +19,7 @@ messagesCmd
         data: {
           message,
           chatId: options.chat,
+          sessionId: options.session,
           noWait: !options.wait,
         },
       });
