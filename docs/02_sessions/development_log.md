@@ -3,6 +3,13 @@
 ## Progress
 - Picked up Ticket 1: Update Configuration Schema & Types
 - Picked up Ticket 2: CLI Flag for Sessions
+- Picked up Ticket 3: State Storage Utilities
+
+## Completed Ticket 3
+- Implemented `getChatSettingsPath` and `getAgentSessionSettingsPath` path resolution functions.
+- Implemented asynchronous storage utilities `readChatSettings`, `writeChatSettings`, `readAgentSessionSettings`, and `writeAgentSessionSettings` using `node:fs/promises` in `src/shared/workspace.ts`.
+- Created robust test suite `src/shared/workspace.test.ts` to ensure utility correctness, path resolution, and error handling for nonexistent/invalid files.
+- `npm run check` and `npm run test` both completed successfully.
 
 ## Completed Ticket 2
 - Added `-s, --session <id>` flag to the CLI `messages send` command in `src/cli/commands/messages.ts`.

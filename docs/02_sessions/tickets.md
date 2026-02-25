@@ -22,7 +22,7 @@
 - Write unit tests for the new storage utility functions.
 - `npm run test`
 - `npm run check`
-**Status**: not started
+**Status**: complete
 
 ## Ticket 4: Daemon Session Resolution & Execution
 **Description**: Update `handleUserMessage` in `src/daemon/message.ts` to resolve the `sessionId` (CLI `--session` -> chat settings -> `'default'`). Check if the agent session state file exists. If it exists, execute `commands.append` (injecting `SESSION_ID` into the `env`). If not, execute `commands.new`.
