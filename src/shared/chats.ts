@@ -19,6 +19,7 @@ export interface CommandLogMessage {
   command: string;
   cwd: string;
   exitCode: number;
+  extractedMessage?: string;
 }
 
 export type ChatMessage = UserMessage | CommandLogMessage;

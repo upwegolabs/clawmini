@@ -129,7 +129,6 @@ export async function handleUserMessage(
       command,
       cwd,
       exitCode: mainResult.exitCode,
-      // extractedMessage will be added to this struct in Ticket 6
       ...(extractedMessage && { extractedMessage }),
     };
     await appendMessage(chatId, logMsg);

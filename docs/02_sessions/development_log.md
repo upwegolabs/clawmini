@@ -37,3 +37,10 @@
 - Refactored `runCommand` in `src/daemon/router.ts` and `src/daemon/message.test.ts` to adhere to the new signature and support piping to `stdin`.
 - Verified changes with extensive unit tests covering the multi-command spawning behavior and state file persistence logic in `src/daemon/message.test.ts`.
 - `npm run check`, `npm run test`, and `npm run lint` all passed successfully.
+
+## Completed Ticket 6
+- Added `extractedMessage?: string` to the `CommandLogMessage` interface in `src/shared/chats.ts`.
+- Removed TODO comments in `src/daemon/message.ts` regarding `extractedMessage`.
+- Wrote full multi-message session E2E test in `src/cli/e2e.test.ts` verifying that `commands.new`, `commands.append`, `commands.getSessionId`, and `commands.getMessageContent` execute as expected and are safely captured.
+- Tested failure scenarios to ensure extraction errors gracefully fallback into `stderr` and preserve the `chat.jsonl` atomic ordering without breaking the log syntax.
+- `npm run check`, `npm run build`, `npm run lint`, and `npm run test` all pass. This concludes the Sessions Feature implementation!
