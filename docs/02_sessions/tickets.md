@@ -30,7 +30,7 @@
 - Add unit tests mocking `node:child_process.spawn` to verify correct commands and environment variables are used.
 - `npm run test`
 - `npm run check`
-**Status**: not started
+**Status**: complete
 
 ## Ticket 5: Command Extraction & State Updates
 **Description**: Implement the extraction logic in the daemon after the primary command finishes. Spawn `getSessionId` (if it was a new session) and `getMessageContent` (if defined), piping the main command's stdout to their stdin. Parse the outputs and update the Chat and Agent Session settings files.

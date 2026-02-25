@@ -1,6 +1,7 @@
 import { appendMessage, type UserMessage } from '../shared/chats.js';
 import { getQueue } from './queue.js';
 import { type Settings } from '../shared/config.js';
+import { readChatSettings, readAgentSessionSettings } from '../shared/workspace.js';
 
 export async function handleUserMessage(
   chatId: string,
@@ -8,7 +9,8 @@ export async function handleUserMessage(
   settings: Settings | undefined,
   cwd: string = process.cwd(),
   noWait: boolean = false,
-  runCommand: (args: { command: string; cwd: string; env: Record<string, string> }) => Promise<void>
+  runCommand: (args: { command: string; cwd: string; env: Record<string, string> }) => Promise<void>,
+  sessionId?: string
 ): Promise<void> {
   // TODO: Immediately persist the user message somewhere (e.g., a crash-recovery log)
   // before enqueueing it, in case the daemon crashes before processing this queue item.
@@ -17,15 +19,33 @@ export async function handleUserMessage(
     throw new Error('No defaultAgent.commands.new defined in settings.json');
   }
 
-  const command = settings.defaultAgent.commands.new;
   const queue = getQueue(cwd);
-  const env = {
-    ...process.env,
-    ...(settings.defaultAgent.env || {}),
-    CLAW_CLI_MESSAGE: message,
-  } as Record<string, string>;
 
   const taskPromise = queue.enqueue(async () => {
+    const chatSettings = await readChatSettings(chatId, cwd);
+    const agentId = typeof chatSettings?.defaultAgent === 'string' ? chatSettings.defaultAgent : 'default';
+
+    let targetSessionId = sessionId;
+    if (!targetSessionId) {
+      const sessions = (chatSettings?.sessions as Record<string, string>) || {};
+      targetSessionId = sessions[agentId] || 'default';
+    }
+
+    const agentSessionSettings = await readAgentSessionSettings(agentId, targetSessionId, cwd);
+
+    let command = settings.defaultAgent!.commands!.new!;
+    let env = {
+      ...process.env,
+      ...(settings.defaultAgent!.env || {}),
+      CLAW_CLI_MESSAGE: message,
+    } as Record<string, string>;
+
+    if (agentSessionSettings && settings.defaultAgent!.commands?.append) {
+      command = settings.defaultAgent!.commands.append;
+      const sessionEnv = (agentSessionSettings.env as Record<string, string>) || {};
+      env = { ...env, ...sessionEnv };
+    }
+
     const userMsg: UserMessage = {
       role: 'user',
       content: message,

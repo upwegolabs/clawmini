@@ -28,6 +28,7 @@ const AppRouter = router({
       const message = input.data.message;
       const chatId = input.data.chatId ?? (await getDefaultChatId());
       const noWait = input.data.noWait ?? false;
+      const sessionId = input.data.sessionId;
       const settingsPath = getSettingsPath();
 
       let settings;
@@ -97,7 +98,8 @@ const AppRouter = router({
               resolve();
             });
           });
-        }
+        },
+        sessionId
       );
 
       return { success: true };

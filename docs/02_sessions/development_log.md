@@ -21,3 +21,10 @@
 - Updated `SettingsSchema` in `src/shared/config.ts` to include `append`, `getSessionId`, and `getMessageContent` commands.
 - Verified that `z.record(z.string(), z.string())` is correctly used.
 - Verified `npm run check` and `npm run test` passed.
+## Completed Ticket 4
+- Updated `handleUserMessage` in `src/daemon/message.ts` to accept an optional `sessionId`.
+- Implemented session resolution logic matching `chatSettings.sessions[agentId]` if `sessionId` is omitted.
+- Implemented environment variable injection and command fallback (`commands.append` vs `commands.new`) depending on whether agent session settings exist.
+- Passed `sessionId` via TRPC mutation in `src/daemon/router.ts`.
+- Updated unit tests in `src/daemon/message.test.ts` heavily mocking `readChatSettings`, `readAgentSessionSettings`, and `spawn` ensuring test isolation by separating cache directories.
+- All checks (`npm run check`, `npm run test`) passed.
