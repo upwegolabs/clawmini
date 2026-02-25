@@ -61,6 +61,28 @@ export const webCmd = new Command('web')
             return;
           }
 
+          if (req.method === 'POST' && urlPath === '/api/chats') {
+            let bodyStr = '';
+            for await (const chunk of req) {
+              bodyStr += chunk;
+            }
+            try {
+              const body = JSON.parse(bodyStr);
+              if (!body.id || typeof body.id !== 'string' || /\s/.test(body.id)) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ error: 'Invalid chat ID. Must not contain whitespace.' }));
+                return;
+              }
+              await createChat(body.id);
+              res.writeHead(201);
+              res.end(JSON.stringify({ id: body.id }));
+            } catch (err) {
+              res.writeHead(500);
+              res.end(JSON.stringify({ error: 'Failed to create chat' }));
+            }
+            return;
+          }
+
           const chatMatch = urlPath.match(/^\/api\/chats\/([^/]+)$/);
           if (req.method === 'GET' && chatMatch && chatMatch[1]) {
             const chatId = chatMatch[1];

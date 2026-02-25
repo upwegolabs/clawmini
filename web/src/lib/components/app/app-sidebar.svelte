@@ -1,8 +1,49 @@
 <script lang="ts">
   import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-  import { MessageSquare } from 'lucide-svelte';
+  import * as Dialog from '$lib/components/ui/dialog/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import { MessageSquare, Plus } from 'lucide-svelte';
+  import { goto, invalidate } from '$app/navigation';
 
   let { chats, currentPath = '/', collapsible = 'offcanvas' } = $props<{ chats: string[], currentPath?: string, collapsible?: 'none' | 'icon' | 'offcanvas' }>();
+
+  let newChatOpen = $state(false);
+  let newChatName = $state('');
+  let isCreating = $state(false);
+
+  let showValidationError = $derived(newChatName.length > 0 && /\s/.test(newChatName));
+  let isValidName = $derived(newChatName.trim().length > 0 && !/\s/.test(newChatName));
+
+  async function createNewChat() {
+    if (!isValidName) return;
+    
+    const validName = newChatName.trim();
+    isCreating = true;
+
+    try {
+      const res = await fetch('/api/chats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: validName })
+      });
+      
+      if (res.ok) {
+        newChatOpen = false;
+        newChatName = '';
+        await invalidate('app:chats');
+        await goto(`/chats/${validName}`);
+      } else {
+        const data = await res.json();
+        window.alert(data.error || 'Failed to create chat.');
+      }
+    } catch (err) {
+      console.error(err);
+      window.alert('An error occurred while creating the chat.');
+    } finally {
+      isCreating = false;
+    }
+  }
 </script>
 
 <Sidebar.Root {collapsible}>
@@ -17,6 +58,54 @@
       <Sidebar.GroupLabel>Chats</Sidebar.GroupLabel>
       <Sidebar.GroupContent>
         <Sidebar.Menu>
+          <Sidebar.MenuItem>
+            <Dialog.Root bind:open={newChatOpen}>
+              <Dialog.Trigger>
+                {#snippet child({ props })}
+                  <Sidebar.MenuButton {...props}>
+                    <Plus />
+                    <span>New Chat</span>
+                  </Sidebar.MenuButton>
+                {/snippet}
+              </Dialog.Trigger>
+              <Dialog.Content class="sm:max-w-[425px]">
+                <Dialog.Header>
+                  <Dialog.Title>Create New Chat</Dialog.Title>
+                  <Dialog.Description>
+                    Enter a name for the new chat. It must be a valid folder name without spaces.
+                  </Dialog.Description>
+                </Dialog.Header>
+                <div class="grid gap-4 py-4">
+                  <div class="flex flex-col gap-2">
+                    <Input
+                      id="name"
+                      bind:value={newChatName}
+                      placeholder="e.g. debugging-session"
+                      class="col-span-3"
+                      autocomplete="off"
+                      autocorrect="off"
+                      autocapitalize="off"
+                      spellcheck="false"
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          createNewChat();
+                        }
+                      }}
+                    />
+                    {#if showValidationError}
+                      <p class="text-sm text-destructive">Name cannot contain spaces.</p>
+                    {/if}
+                  </div>
+                </div>
+                <Dialog.Footer>
+                  <Button type="submit" disabled={!isValidName || isCreating} onclick={createNewChat}>
+                    {isCreating ? 'Creating...' : 'Create Chat'}
+                  </Button>
+                </Dialog.Footer>
+              </Dialog.Content>
+            </Dialog.Root>
+          </Sidebar.MenuItem>
           {#each chats as chat}
             <Sidebar.MenuItem>
               <Sidebar.MenuButton isActive={currentPath === `/chats/${chat}`}>
