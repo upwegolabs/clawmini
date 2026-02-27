@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { getDaemonClient } from '../client.js';
 import { getMessages, getDefaultChatId } from '../../shared/chats.js';
+import { getAgent, isValidAgentId } from '../../shared/workspace.js';
 
 export const messagesCmd = new Command('messages').description('Manage messages');
 
@@ -9,9 +10,25 @@ messagesCmd
   .description('Send a new message')
   .option('-c, --chat <id>', 'Specific chat to send the message to')
   .option('-s, --session <id>', 'Specific session to send the message to')
+  .option('-a, --agent <name>', 'Specific agent to use for this message')
   .option('--no-wait', 'Return immediately after the server queues the message')
   .action(async (message, options) => {
     try {
+      if (options.agent) {
+        if (!isValidAgentId(options.agent)) {
+          console.error(`Error: Invalid agent ID '${options.agent}'.`);
+          process.exit(1);
+        }
+
+        if (options.agent !== 'default') {
+          const agent = await getAgent(options.agent);
+          if (!agent) {
+            console.error(`Error: Agent '${options.agent}' not found.`);
+            process.exit(1);
+          }
+        }
+      }
+
       const trpc = await getDaemonClient();
       await trpc.sendMessage.mutate({
         type: 'send-message',
@@ -20,6 +37,7 @@ messagesCmd
           message,
           chatId: options.chat,
           sessionId: options.session,
+          agentId: options.agent,
           noWait: !options.wait,
         },
       });

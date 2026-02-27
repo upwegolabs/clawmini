@@ -3,8 +3,25 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { listChats, getMessages, getChatsDir, createChat } from '../../shared/chats.js';
+import { z } from 'zod';
+import type { ZodType } from 'zod';
+import {
+  listChats,
+  getMessages,
+  getChatsDir,
+  createChat,
+  isValidChatId,
+} from '../../shared/chats.js';
 import { getDaemonClient } from '../client.js';
+import {
+  listAgents,
+  getAgent,
+  writeAgentSettings,
+  writeChatSettings,
+  deleteAgent,
+  isValidAgentId,
+} from '../../shared/workspace.js';
+import { pathIsInsideDir } from '../../shared/utils/fs.js';
 
 const mimeTypes: Record<string, string> = {
   '.html': 'text/html',
@@ -37,6 +54,31 @@ export const webCmd = new Command('web')
     const __dirname = path.dirname(__filename);
     const webDir = path.resolve(__dirname, '../web');
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async function parseJsonBody<T = any>(
+      req: http.IncomingMessage,
+      schema?: ZodType<T>
+    ): Promise<T> {
+      if (req.headers['content-type'] !== 'application/json') {
+        throw new Error('Invalid Content-Type');
+      }
+      let bodyStr = '';
+      for await (const chunk of req) {
+        bodyStr += chunk;
+      }
+      const rawBody = JSON.parse(bodyStr);
+      if (schema) {
+        return schema.parse(rawBody);
+      }
+      return rawBody as T;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function sendJsonResponse(res: http.ServerResponse, statusCode: number, data: any) {
+      res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
+    }
+
     const server = http.createServer(async (req, res) => {
       try {
         const urlPath = req.url === '/' ? '/index.html' : req.url?.split('?')[0] || '/';
@@ -54,31 +96,139 @@ export const webCmd = new Command('web')
             return;
           }
 
+          if (req.method === 'GET' && urlPath === '/api/agents') {
+            const agentIds = await listAgents();
+            const agents = [];
+            for (const id of agentIds) {
+              const agent = await getAgent(id);
+              if (agent) {
+                agents.push({ id, ...agent });
+              }
+            }
+            sendJsonResponse(res, 200, agents);
+            return;
+          }
+
+          if (req.method === 'POST' && urlPath === '/api/agents') {
+            try {
+              const schema = z.object({
+                id: z.string().refine(isValidAgentId, { message: 'Invalid agent ID' }),
+                directory: z.string().optional(),
+                env: z.record(z.string(), z.string()).optional(),
+                commands: z.record(z.string(), z.string()).optional(),
+              });
+
+              const body = await parseJsonBody(req, schema);
+
+              const existing = await getAgent(body.id);
+              if (existing) {
+                sendJsonResponse(res, 409, { error: 'Agent already exists' });
+                return;
+              }
+
+              const newAgent = {
+                directory: body.directory,
+                env: body.env || {},
+                commands: body.commands || {},
+              };
+
+              try {
+                await writeAgentSettings(body.id, newAgent);
+              } catch (err) {
+                sendJsonResponse(res, 400, {
+                  error: err instanceof Error ? err.message : 'Invalid agent directory',
+                });
+                return;
+              }
+
+              sendJsonResponse(res, 201, { id: body.id, ...newAgent });
+            } catch {
+              sendJsonResponse(res, 500, { error: 'Failed to create agent' });
+            }
+            return;
+          }
+
+          const agentMatch = urlPath.match(/^\/api\/agents\/([^/]+)$/);
+          if (agentMatch && agentMatch[1]) {
+            const agentId = agentMatch[1];
+
+            if (!isValidAgentId(agentId)) {
+              sendJsonResponse(res, 400, { error: 'Invalid agent ID' });
+              return;
+            }
+
+            if (req.method === 'GET') {
+              const agent = await getAgent(agentId);
+              if (!agent) {
+                sendJsonResponse(res, 404, { error: 'Agent not found' });
+                return;
+              }
+              sendJsonResponse(res, 200, { id: agentId, ...agent });
+              return;
+            }
+
+            if (req.method === 'PUT' || req.method === 'POST') {
+              try {
+                const schema = z.object({
+                  directory: z.string().optional(),
+                  env: z.record(z.string(), z.string()).optional(),
+                  commands: z.record(z.string(), z.string()).optional(),
+                });
+
+                const body = await parseJsonBody(req, schema);
+
+                const agent = (await getAgent(agentId)) || {};
+                if (body.directory !== undefined) agent.directory = body.directory;
+                if (body.env !== undefined) agent.env = body.env;
+                if (body.commands !== undefined) agent.commands = body.commands;
+
+                try {
+                  await writeAgentSettings(agentId, agent);
+                } catch (err) {
+                  sendJsonResponse(res, 400, {
+                    error: err instanceof Error ? err.message : 'Invalid agent directory',
+                  });
+                  return;
+                }
+
+                sendJsonResponse(res, 200, { id: agentId, ...agent });
+              } catch {
+                sendJsonResponse(res, 500, { error: 'Failed to update agent' });
+              }
+              return;
+            }
+
+            if (req.method === 'DELETE') {
+              await deleteAgent(agentId);
+              sendJsonResponse(res, 200, { success: true });
+              return;
+            }
+          }
+
           if (req.method === 'GET' && urlPath === '/api/chats') {
             const chats = await listChats();
-            res.writeHead(200);
-            res.end(JSON.stringify(chats));
+            sendJsonResponse(res, 200, chats);
             return;
           }
 
           if (req.method === 'POST' && urlPath === '/api/chats') {
-            let bodyStr = '';
-            for await (const chunk of req) {
-              bodyStr += chunk;
-            }
             try {
-              const body = JSON.parse(bodyStr);
-              if (!body.id || typeof body.id !== 'string' || /\s/.test(body.id)) {
-                res.writeHead(400);
-                res.end(JSON.stringify({ error: 'Invalid chat ID. Must not contain whitespace.' }));
-                return;
-              }
+              const schema = z.object({
+                id: z.string().refine(isValidChatId, {
+                  message: 'Invalid chat ID. Must be alphanumeric with dashes or underscores.',
+                }),
+                agent: z.string().optional(),
+              });
+
+              const body = await parseJsonBody(req, schema);
+
               await createChat(body.id);
-              res.writeHead(201);
-              res.end(JSON.stringify({ id: body.id }));
-            } catch (err) {
-              res.writeHead(500);
-              res.end(JSON.stringify({ error: 'Failed to create chat' }));
+              if (body.agent) {
+                await writeChatSettings(body.id, { defaultAgent: body.agent });
+              }
+              sendJsonResponse(res, 201, { id: body.id, agent: body.agent });
+            } catch {
+              sendJsonResponse(res, 500, { error: 'Failed to create chat' });
             }
             return;
           }
@@ -88,11 +238,9 @@ export const webCmd = new Command('web')
             const chatId = chatMatch[1];
             try {
               const messages = await getMessages(chatId);
-              res.writeHead(200);
-              res.end(JSON.stringify(messages));
+              sendJsonResponse(res, 200, messages);
             } catch {
-              res.writeHead(404);
-              res.end(JSON.stringify({ error: 'Chat not found' }));
+              sendJsonResponse(res, 404, { error: 'Chat not found' });
             }
             return;
           }
@@ -162,23 +310,18 @@ export const webCmd = new Command('web')
           const messageMatch = urlPath.match(/^\/api\/chats\/([^/]+)\/messages$/);
           if (req.method === 'POST' && messageMatch && messageMatch[1]) {
             const chatId = messageMatch[1];
-            let bodyStr = '';
-            for await (const chunk of req) {
-              bodyStr += chunk;
-            }
+
+            const schema = z.object({
+              message: z.string().min(1, 'Missing or invalid "message" field'),
+            });
 
             let body;
             try {
-              body = JSON.parse(bodyStr);
-            } catch {
-              res.writeHead(400);
-              res.end(JSON.stringify({ error: 'Invalid JSON body' }));
-              return;
-            }
-
-            if (!body.message || typeof body.message !== 'string') {
-              res.writeHead(400);
-              res.end(JSON.stringify({ error: 'Missing or invalid "message" field' }));
+              body = await parseJsonBody(req, schema);
+            } catch (err) {
+              sendJsonResponse(res, 400, {
+                error: err instanceof Error ? err.message : 'Invalid request',
+              });
               return;
             }
 
@@ -193,18 +336,15 @@ export const webCmd = new Command('web')
                   noWait: true,
                 },
               });
-              res.writeHead(200);
-              res.end(JSON.stringify({ success: true }));
+              sendJsonResponse(res, 200, { success: true });
             } catch (err) {
               const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-              res.writeHead(500);
-              res.end(JSON.stringify({ error: errorMessage || 'Internal Server Error' }));
+              sendJsonResponse(res, 500, { error: errorMessage || 'Internal Server Error' });
             }
             return;
           }
 
-          res.writeHead(404);
-          res.end(JSON.stringify({ error: 'Not Found' }));
+          sendJsonResponse(res, 404, { error: 'Not Found' });
           return;
         }
 
@@ -212,7 +352,7 @@ export const webCmd = new Command('web')
         let filePath = path.join(webDir, urlPath);
 
         // Prevent directory traversal
-        if (!filePath.startsWith(webDir)) {
+        if (!pathIsInsideDir(filePath, webDir)) {
           res.writeHead(403);
           res.end('Forbidden');
           return;

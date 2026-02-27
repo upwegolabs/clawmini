@@ -1,6 +1,15 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
+import {
+  type Agent,
+  AgentSchema,
+  type ChatSettings,
+  ChatSettingsSchema,
+  type AgentSessionSettings,
+  AgentSessionSettingsSchema,
+} from './config.js';
+import { pathIsInsideDir } from './utils/fs.js';
 
 export function getWorkspaceRoot(startDir = process.cwd()): string {
   let curr = startDir;
@@ -14,6 +23,37 @@ export function getWorkspaceRoot(startDir = process.cwd()): string {
     curr = path.dirname(curr);
   }
   return startDir;
+}
+
+export function resolveAgentWorkDir(
+  agentId: string,
+  customDir?: string,
+  startDir = process.cwd()
+): string {
+  const workspaceRoot = getWorkspaceRoot(startDir);
+  const dirPath = customDir
+    ? path.resolve(workspaceRoot, customDir)
+    : path.resolve(workspaceRoot, agentId);
+
+  if (!pathIsInsideDir(dirPath, workspaceRoot, { allowSameDir: true })) {
+    throw new Error('Invalid agent directory: resolves outside the workspace.');
+  }
+
+  return dirPath;
+}
+
+export async function ensureAgentWorkDir(
+  agentId: string,
+  customDir?: string,
+  startDir = process.cwd()
+): Promise<string> {
+  const dirPath = resolveAgentWorkDir(agentId, customDir, startDir);
+
+  if (!fs.existsSync(dirPath)) {
+    await fsPromises.mkdir(dirPath, { recursive: true });
+    console.log(`Created agent working directory at ${dirPath}`);
+  }
+  return dirPath;
 }
 
 export function getClawminiDir(startDir = process.cwd()): string {
@@ -32,11 +72,30 @@ export function getChatSettingsPath(chatId: string, startDir = process.cwd()): s
   return path.join(getClawminiDir(startDir), 'chats', chatId, 'settings.json');
 }
 
+export function isValidAgentId(agentId: string): boolean {
+  if (!agentId || agentId.length === 0) return false;
+  return /^[a-zA-Z0-9_]+(?:-[a-zA-Z0-9_]+)*$/.test(agentId);
+}
+
+export function getAgentDir(agentId: string, startDir = process.cwd()): string {
+  if (!isValidAgentId(agentId)) {
+    throw new Error(`Invalid agent ID: ${agentId}`);
+  }
+  return path.join(getClawminiDir(startDir), 'agents', agentId);
+}
+
+export function getAgentSettingsPath(agentId: string, startDir = process.cwd()): string {
+  return path.join(getAgentDir(agentId, startDir), 'settings.json');
+}
+
 export function getAgentSessionSettingsPath(
   agentId: string,
   sessionId: string,
   startDir = process.cwd()
 ): string {
+  if (!isValidAgentId(agentId)) {
+    throw new Error(`Invalid agent ID: ${agentId}`);
+  }
   return path.join(
     getClawminiDir(startDir),
     'agents',
@@ -65,31 +124,93 @@ async function writeJsonFile(filePath: string, data: Record<string, unknown>): P
 export async function readChatSettings(
   chatId: string,
   startDir = process.cwd()
-): Promise<Record<string, unknown> | null> {
-  return readJsonFile(getChatSettingsPath(chatId, startDir));
+): Promise<ChatSettings | null> {
+  const data = await readJsonFile(getChatSettingsPath(chatId, startDir));
+  if (!data) return null;
+  const parsed = ChatSettingsSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 }
 
 export async function writeChatSettings(
   chatId: string,
-  data: Record<string, unknown>,
+  data: ChatSettings,
   startDir = process.cwd()
 ): Promise<void> {
-  await writeJsonFile(getChatSettingsPath(chatId, startDir), data);
+  await writeJsonFile(getChatSettingsPath(chatId, startDir), data as Record<string, unknown>);
 }
 
 export async function readAgentSessionSettings(
   agentId: string,
   sessionId: string,
   startDir = process.cwd()
-): Promise<Record<string, unknown> | null> {
-  return readJsonFile(getAgentSessionSettingsPath(agentId, sessionId, startDir));
+): Promise<AgentSessionSettings | null> {
+  const data = await readJsonFile(getAgentSessionSettingsPath(agentId, sessionId, startDir));
+  if (!data) return null;
+  const parsed = AgentSessionSettingsSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 }
 
 export async function writeAgentSessionSettings(
   agentId: string,
   sessionId: string,
-  data: Record<string, unknown>,
+  data: AgentSessionSettings,
   startDir = process.cwd()
 ): Promise<void> {
-  await writeJsonFile(getAgentSessionSettingsPath(agentId, sessionId, startDir), data);
+  await writeJsonFile(
+    getAgentSessionSettingsPath(agentId, sessionId, startDir),
+    data as Record<string, unknown>
+  );
+}
+
+export async function getAgent(agentId: string, startDir = process.cwd()): Promise<Agent | null> {
+  const data = await readJsonFile(getAgentSettingsPath(agentId, startDir));
+  if (!data) return null;
+  const parsed = AgentSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+export async function writeAgentSettings(
+  agentId: string,
+  data: Agent,
+  startDir = process.cwd()
+): Promise<void> {
+  await ensureAgentWorkDir(agentId, data.directory, startDir);
+  await writeJsonFile(getAgentSettingsPath(agentId, startDir), data as Record<string, unknown>);
+}
+
+export async function listAgents(startDir = process.cwd()): Promise<string[]> {
+  const agentsDir = path.join(getClawminiDir(startDir), 'agents');
+  try {
+    const entries = await fsPromises.readdir(agentsDir, { withFileTypes: true });
+    const agentIds = [];
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const settingsPath = path.join(agentsDir, entry.name, 'settings.json');
+        try {
+          await fsPromises.access(settingsPath);
+          agentIds.push(entry.name);
+        } catch {
+          // No settings.json, probably just a sessions dir for a non-existent agent or default agent
+        }
+      }
+    }
+    return agentIds;
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteAgent(agentId: string, startDir = process.cwd()): Promise<void> {
+  const dir = getAgentDir(agentId, startDir);
+  const agentsDir = path.join(getClawminiDir(startDir), 'agents');
+
+  if (!pathIsInsideDir(dir, agentsDir)) {
+    throw new Error(`Security Error: Cannot delete agent directory outside of ${agentsDir}`);
+  }
+
+  try {
+    await fsPromises.rm(dir, { recursive: true, force: true });
+  } catch {
+    // Ignore if not found
+  }
 }
