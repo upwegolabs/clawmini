@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   type Agent,
   AgentSchema,
@@ -212,5 +213,114 @@ export async function deleteAgent(agentId: string, startDir = process.cwd()): Pr
     await fsPromises.rm(dir, { recursive: true, force: true });
   } catch {
     // Ignore if not found
+  }
+}
+
+async function isDirectory(dirPath: string): Promise<boolean> {
+  try {
+    const stat = await fsPromises.stat(dirPath);
+    return stat.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export async function resolveTemplatePath(
+  templateName: string,
+  startDir = process.cwd()
+): Promise<string> {
+  const workspaceRoot = getWorkspaceRoot(startDir);
+  const localTemplatePath = path.join(workspaceRoot, '.clawmini', 'templates', templateName);
+
+  if (await isDirectory(localTemplatePath)) {
+    return localTemplatePath;
+  }
+
+  // Fallback to built-in templates
+  // Find the clawmini package root by looking for package.json
+  let currentDir = path.dirname(fileURLToPath(import.meta.url));
+  while (
+    currentDir !== path.parse(currentDir).root &&
+    !fs.existsSync(path.join(currentDir, 'package.json'))
+  ) {
+    currentDir = path.dirname(currentDir);
+  }
+
+  const searchPath = path.join(currentDir, 'templates', templateName);
+
+  if (await isDirectory(searchPath)) {
+    return searchPath;
+  }
+
+  throw new Error(
+    `Template not found: ${templateName} (searched local: ${localTemplatePath}, built-in: ${searchPath})`
+  );
+}
+
+export async function copyTemplate(
+  templateName: string,
+  targetDir: string,
+  startDir = process.cwd()
+): Promise<void> {
+  const templatePath = await resolveTemplatePath(templateName, startDir);
+
+  // Check if target directory exists and is not empty
+  try {
+    const entries = await fsPromises.readdir(targetDir);
+    if (entries.length > 0) {
+      throw new Error(`Target directory is not empty: ${targetDir}`);
+    }
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+      throw new Error(`Target directory does not exist: ${targetDir}`, { cause: err });
+    }
+    throw err;
+  }
+
+  // Recursively copy
+  await fsPromises.cp(templatePath, targetDir, { recursive: true });
+}
+
+export async function applyTemplateToAgent(
+  agentId: string,
+  templateName: string,
+  overrides: Agent,
+  startDir = process.cwd()
+): Promise<void> {
+  const agentWorkDir = resolveAgentWorkDir(agentId, overrides.directory, startDir);
+  await copyTemplate(templateName, agentWorkDir, startDir);
+
+  const settingsPath = path.join(agentWorkDir, 'settings.json');
+  try {
+    const rawSettings = await fsPromises.readFile(settingsPath, 'utf-8');
+    const parsedSettings = JSON.parse(rawSettings);
+    const validation = AgentSchema.safeParse(parsedSettings);
+
+    if (validation.success) {
+      const templateData = validation.data;
+      if (templateData.directory) {
+        console.warn(
+          `Warning: Ignoring 'directory' field from template settings.json. Using default or provided directory.`
+        );
+        delete templateData.directory;
+      }
+
+      // Merge: overrides take precedence over templateData
+      const mergedEnv = { ...(templateData.env || {}), ...(overrides.env || {}) };
+      const mergedData: Agent = { ...templateData, ...overrides };
+      if (Object.keys(mergedEnv).length > 0) {
+        mergedData.env = mergedEnv;
+      }
+
+      await writeAgentSettings(agentId, mergedData, startDir);
+    }
+  } catch {
+    // Ignore parsing or file not found errors
+  } finally {
+    try {
+      await fsPromises.rm(settingsPath);
+    } catch {
+      // Ignore if it doesn't exist
+    }
   }
 }

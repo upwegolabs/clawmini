@@ -5,8 +5,9 @@ import {
   writeAgentSettings,
   deleteAgent,
   isValidAgentId,
+  applyTemplateToAgent,
 } from '../../shared/workspace.js';
-import type { Agent } from '../../shared/config.js';
+import { type Agent } from '../../shared/config.js';
 
 export const agentsCmd = new Command('agents').description('Manage agents');
 
@@ -55,33 +56,42 @@ agentsCmd
   .command('add <id>')
   .description('Create a new agent')
   .option('-d, --directory <dir>', 'Working directory for the agent')
+  .option('-t, --template <name>', 'Template to use for the agent')
   .option(
     '-e, --env <env...>',
     'Environment variables in KEY=VALUE format (can be specified multiple times)'
   )
-  .action(async (id: string, options: { directory?: string; env?: string[] }) => {
-    try {
-      assertValidAgentId(id);
-      const existing = await getAgent(id);
-      if (existing) {
-        throw new Error(`Agent ${id} already exists.`);
-      }
+  .action(
+    async (id: string, options: { directory?: string; template?: string; env?: string[] }) => {
+      try {
+        assertValidAgentId(id);
+        const existing = await getAgent(id);
+        if (existing) {
+          throw new Error(`Agent ${id} already exists.`);
+        }
 
-      const agentData: Agent = {};
-      if (options.directory) {
-        agentData.directory = options.directory;
-      }
-      const env = parseEnv(options.env);
-      if (env) {
-        agentData.env = env;
-      }
+        const agentData: Agent = {};
 
-      await writeAgentSettings(id, agentData);
-      console.log(`Agent ${id} created successfully.`);
-    } catch (err) {
-      handleError('create agent', err);
+        if (options.directory) {
+          agentData.directory = options.directory;
+        }
+        const env = parseEnv(options.env);
+        if (env) {
+          agentData.env = { ...(agentData.env || {}), ...env };
+        }
+
+        await writeAgentSettings(id, agentData);
+
+        if (options.template) {
+          await applyTemplateToAgent(id, options.template, agentData);
+        }
+
+        console.log(`Agent ${id} created successfully.`);
+      } catch (err) {
+        handleError('create agent', err);
+      }
     }
-  });
+  );
 
 agentsCmd
   .command('update <id>')
