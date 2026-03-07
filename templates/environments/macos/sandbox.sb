@@ -1,0 +1,19 @@
+(version 1)
+
+;; allow everything by default
+(allow default)
+
+;; deny all writes EXCEPT under specific paths
+(deny file-write*)
+(allow file-write*
+    (subpath (param "WORKSPACE"))
+    (subpath (string-append (param "HOME") "/.gemini"))
+    (subpath (string-append (param "HOME") "/.npm"))
+    (subpath (string-append (param "HOME") "/.cache"))
+    (subpath (string-append (param "HOME") "/.gitconfig"))
+    (literal "/dev/stdout")
+    (literal "/dev/stderr")
+    (literal "/dev/null")
+    (literal "/dev/ptmx")
+    (regex #"^/dev/ttys[0-9]*$")
+)

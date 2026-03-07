@@ -6,6 +6,7 @@ import { executeDirectMessage, getInitialRouterState, type RunCommandFn } from '
 import type { CronJob, Settings } from '../shared/config.js';
 import fs from 'node:fs/promises';
 import { getSettingsPath } from '../shared/workspace.js';
+import { applyEnvOverrides } from '../shared/utils/env.js';
 import { spawn } from 'node:child_process';
 
 const runCommand: RunCommandFn = async ({ command, cwd, env, stdin }) => {
@@ -146,7 +147,10 @@ export class CronManager {
         overrideSessionId
       );
 
-      if (job.env !== undefined) routerState.env = job.env;
+      if (job.env !== undefined) {
+        routerState.env = routerState.env || {};
+        applyEnvOverrides(routerState.env, job.env);
+      }
       if (job.reply !== undefined) routerState.reply = job.reply;
 
       await executeDirectMessage(

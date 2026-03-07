@@ -1,3 +1,5 @@
+/* eslint-disable max-lines */
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
@@ -9,6 +11,10 @@ import {
   ChatSettingsSchema,
   type AgentSessionSettings,
   AgentSessionSettingsSchema,
+  type Environment,
+  EnvironmentSchema,
+  type Settings,
+  SettingsSchema,
 } from './config.js';
 import { pathIsInsideDir } from './utils/fs.js';
 
@@ -225,7 +231,7 @@ async function isDirectory(dirPath: string): Promise<boolean> {
   }
 }
 
-export async function resolveTemplatePath(
+export async function resolveTemplatePathBase(
   templateName: string,
   startDir = process.cwd()
 ): Promise<string> {
@@ -257,13 +263,28 @@ export async function resolveTemplatePath(
   );
 }
 
-export async function copyTemplate(
+export async function resolveTemplatePath(
   templateName: string,
-  targetDir: string,
   startDir = process.cwd()
-): Promise<void> {
-  const templatePath = await resolveTemplatePath(templateName, startDir);
+): Promise<string> {
+  if (templateName === 'environments' || templateName.startsWith('environments/')) {
+    throw new Error(`Template not found: ${templateName}`);
+  }
+  return resolveTemplatePathBase(templateName, startDir);
+}
 
+export async function resolveEnvironmentTemplatePath(
+  templateName: string,
+  startDir = process.cwd()
+): Promise<string> {
+  return resolveTemplatePathBase(path.join('environments', templateName), startDir);
+}
+
+export async function copyTemplateBase(
+  templatePath: string,
+  targetDir: string,
+  allowMissingDir: boolean = false
+): Promise<void> {
   // Check if target directory exists and is not empty
   try {
     const entries = await fsPromises.readdir(targetDir);
@@ -272,13 +293,36 @@ export async function copyTemplate(
     }
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
-      throw new Error(`Target directory does not exist: ${targetDir}`, { cause: err });
+      if (allowMissingDir) {
+        await fsPromises.mkdir(targetDir, { recursive: true });
+      } else {
+        throw new Error(`Target directory does not exist: ${targetDir}`, { cause: err });
+      }
+    } else {
+      throw err;
     }
-    throw err;
   }
 
   // Recursively copy
   await fsPromises.cp(templatePath, targetDir, { recursive: true });
+}
+
+export async function copyTemplate(
+  templateName: string,
+  targetDir: string,
+  startDir = process.cwd()
+): Promise<void> {
+  const templatePath = await resolveTemplatePath(templateName, startDir);
+  await copyTemplateBase(templatePath, targetDir, false);
+}
+
+export async function copyEnvironmentTemplate(
+  templateName: string,
+  targetDir: string,
+  startDir = process.cwd()
+): Promise<void> {
+  const templatePath = await resolveEnvironmentTemplatePath(templateName, startDir);
+  await copyTemplateBase(templatePath, targetDir, true);
 }
 
 export async function applyTemplateToAgent(
@@ -322,5 +366,93 @@ export async function applyTemplateToAgent(
     } catch {
       // Ignore if it doesn't exist
     }
+  }
+}
+
+export async function readSettings(startDir = process.cwd()): Promise<Settings | null> {
+  const data = await readJsonFile(getSettingsPath(startDir));
+  if (!data) return null;
+  const parsed = SettingsSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+export async function writeSettings(data: Settings, startDir = process.cwd()): Promise<void> {
+  await writeJsonFile(getSettingsPath(startDir), data as Record<string, unknown>);
+}
+
+export function getEnvironmentPath(name: string, startDir = process.cwd()): string {
+  return path.join(getClawminiDir(startDir), 'environments', name);
+}
+
+export async function readEnvironment(
+  name: string,
+  startDir = process.cwd()
+): Promise<Environment | null> {
+  const data = await readJsonFile(path.join(getEnvironmentPath(name, startDir), 'env.json'));
+  if (!data) return null;
+  const parsed = EnvironmentSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
+export async function getActiveEnvironmentName(
+  targetPath: string,
+  startDir = process.cwd()
+): Promise<string | null> {
+  const settings = await readSettings(startDir);
+  if (!settings?.environments) return null;
+
+  const workspaceRoot = getWorkspaceRoot(startDir);
+  const resolvedTarget = path.resolve(workspaceRoot, targetPath);
+
+  let bestMatch: string | null = null;
+  let maxDepth = -1;
+
+  for (const [envPath, envName] of Object.entries(settings.environments)) {
+    const resolvedEnvPath = path.resolve(workspaceRoot, envPath);
+
+    if (pathIsInsideDir(resolvedTarget, resolvedEnvPath, { allowSameDir: true })) {
+      const depth = resolvedEnvPath.split(path.sep).length;
+      if (depth > maxDepth) {
+        maxDepth = depth;
+        bestMatch = envName;
+      }
+    }
+  }
+
+  return bestMatch;
+}
+
+export async function enableEnvironment(
+  name: string,
+  targetPath: string = './',
+  startDir = process.cwd()
+): Promise<void> {
+  const targetDir = getEnvironmentPath(name, startDir);
+
+  // Copy template to targetDir if it does not already exist
+  if (!fs.existsSync(targetDir)) {
+    await copyEnvironmentTemplate(name, targetDir, startDir);
+    console.log(`Copied environment template '${name}'.`);
+  } else {
+    console.log(`Environment template '${name}' already exists in workspace.`);
+  }
+
+  const settings = (await readSettings(startDir)) || { chats: { defaultId: '' } };
+  const environments = settings.environments || {};
+
+  environments[targetPath] = name;
+  settings.environments = environments;
+
+  await writeSettings(settings, startDir);
+  console.log(`Enabled environment '${name}' for path '${targetPath}'.`);
+
+  // Execute init command if present
+  const envConfig = await readEnvironment(name, startDir);
+  if (envConfig?.init) {
+    // Get the target directory for the environment
+    const workspaceRoot = getWorkspaceRoot(startDir);
+    const affectedDir = path.resolve(workspaceRoot, targetPath);
+    console.log(`Executing init command for environment '${name}': ${envConfig.init}`);
+    execSync(envConfig.init, { cwd: affectedDir, stdio: 'inherit' });
   }
 }

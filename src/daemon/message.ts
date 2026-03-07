@@ -17,8 +17,12 @@ import {
   writeAgentSessionSettings,
   getAgent,
   getWorkspaceRoot,
+  getActiveEnvironmentName,
+  getEnvironmentPath,
+  readEnvironment,
 } from '../shared/workspace.js';
 import { getApiContext, generateToken } from './auth.js';
+import { applyEnvOverrides, getActiveEnvKeys } from '../shared/utils/env.js';
 import { z } from 'zod';
 
 type Fallback = z.infer<typeof FallbackSchema>;
@@ -92,16 +96,16 @@ function prepareCommandAndEnv(
   };
 
   let command = currentAgent.commands?.new ?? '';
-  let env = {
+  const env = {
     ...process.env,
-    ...(currentAgent.env || {}),
     CLAW_CLI_MESSAGE: message,
   } as Record<string, string>;
 
+  applyEnvOverrides(env, currentAgent.env);
+
   if (!isNewSession && currentAgent.commands?.append) {
     command = currentAgent.commands.append;
-    const sessionEnv = agentSessionSettings?.env || {};
-    env = { ...env, ...sessionEnv };
+    applyEnvOverrides(env, agentSessionSettings?.env);
   }
 
   return { command, env, currentAgent };
@@ -116,6 +120,7 @@ async function runExtractionCommand(
   mainResult: RunCommandResult
 ): Promise<{ result?: string; error?: string }> {
   try {
+    console.log(`Executing extraction command (${name}): ${command}`);
     const res = await runCommand({
       command,
       cwd,
@@ -130,6 +135,37 @@ async function runExtractionCommand(
   } catch (e) {
     return { error: `${name} error: ${(e as Error).message}` };
   }
+}
+
+/**
+ * Formats the environment prefix string by replacing placeholders with actual values.
+ * Available placeholders:
+ * - {WORKSPACE_DIR}: The root directory of the workspace.
+ * - {AGENT_DIR}: The directory where the agent is executing.
+ * - {ENV_DIR}: The directory of the active environment.
+ * - {HOME_DIR}: The home directory of the current user.
+ * - {ENV_ARGS}: The formatted environment arguments based on envFormat.
+ */
+function formatEnvironmentPrefix(
+  prefix: string,
+  replacements: {
+    workspaceRoot: string;
+    executionCwd: string;
+    envDir: string;
+    envArgs: string;
+  }
+): string {
+  const map: Record<string, string> = {
+    '{WORKSPACE_DIR}': replacements.workspaceRoot,
+    '{AGENT_DIR}': replacements.executionCwd,
+    '{ENV_DIR}': replacements.envDir,
+    '{HOME_DIR}': process.env.HOME || '',
+    '{ENV_ARGS}': replacements.envArgs,
+  };
+  return prefix.replace(
+    /{(WORKSPACE_DIR|AGENT_DIR|ENV_DIR|HOME_DIR|ENV_ARGS)}/g,
+    (match) => map[match] || match
+  );
 }
 
 export async function executeDirectMessage(
@@ -236,35 +272,92 @@ export async function executeDirectMessage(
           await sleep(delay);
         }
 
-        const { command, env, currentAgent } = prepareCommandAndEnv(
+        const {
+          env,
+          currentAgent,
+          command: initialCommand,
+        } = prepareCommandAndEnv(
           mergedAgent,
           state.message,
           isNewSession,
           agentSessionSettings,
           config.fallback
         );
+        let command = initialCommand;
 
         if (!command) {
           continue;
         }
 
+        const agentSpecificEnv = getActiveEnvKeys(
+          currentAgent.env,
+          !isNewSession ? agentSessionSettings?.env : undefined
+        );
+        agentSpecificEnv.add('CLAW_CLI_MESSAGE');
+
         Object.assign(env, routerEnv);
+        Object.keys(routerEnv).forEach((k) => agentSpecificEnv.add(k));
 
         const apiCtx = getApiContext(settings);
         if (apiCtx) {
-          if (apiCtx.proxy_host) {
-            env['CLAW_API_URL'] = `${apiCtx.proxy_host}:${apiCtx.port}`;
-          } else {
-            env['CLAW_API_URL'] = `http://${apiCtx.host}:${apiCtx.port}`;
-          }
-          env['CLAW_API_TOKEN'] = generateToken({
+          const proxyUrl = apiCtx.proxy_host
+            ? `${apiCtx.proxy_host}:${apiCtx.port}`
+            : `http://${apiCtx.host}:${apiCtx.port}`;
+          env['CLAW_API_URL'] = proxyUrl;
+          agentSpecificEnv.add('CLAW_API_URL');
+
+          const token = generateToken({
             chatId,
             agentId,
             sessionId: finalSessionId,
             timestamp: Date.now(),
           });
+          env['CLAW_API_TOKEN'] = token;
+          agentSpecificEnv.add('CLAW_API_TOKEN');
         }
 
+        const activeEnvName = await getActiveEnvironmentName(executionCwd, cwd);
+        if (activeEnvName) {
+          const activeEnv = await readEnvironment(activeEnvName, cwd);
+
+          if (activeEnv?.env) {
+            for (const [key, value] of Object.entries(activeEnv.env)) {
+              if (value === false) {
+                delete env[key];
+                agentSpecificEnv.delete(key);
+              } else {
+                env[key] = String(value);
+                agentSpecificEnv.add(key);
+              }
+            }
+          }
+
+          if (activeEnv?.prefix) {
+            const envArgs = Array.from(agentSpecificEnv)
+              .map((key) => {
+                if (activeEnv.envFormat) {
+                  return activeEnv.envFormat.replace('{key}', key);
+                }
+                return key;
+              })
+              .join(' ');
+
+            const prefixReplaced = formatEnvironmentPrefix(activeEnv.prefix, {
+              workspaceRoot,
+              executionCwd,
+              envDir: getEnvironmentPath(activeEnvName, cwd),
+              envArgs,
+            });
+
+            if (prefixReplaced.includes('{COMMAND}')) {
+              command = prefixReplaced.replace('{COMMAND}', command);
+            } else {
+              command = `${prefixReplaced} ${command}`;
+            }
+          }
+        }
+
+        console.log(`Executing command: ${command}`);
         const mainResult = await runCommand({ command, cwd: executionCwd, env });
 
         const logMsg: CommandLogMessage = {
