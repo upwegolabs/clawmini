@@ -1,98 +1,91 @@
 # Clawmini
 
-Clawmini is an orchestration layer for command-line AI agents, providing a unified chat experience that can span multiple conversations and multiple agents. Ultimately, it aims to deliver a personal assistant experience built entirely on top of your local tools and agents.
+**The secure, local-first orchestrator for your AI agents.**
 
-## Features
+Clawmini gives you the power of a proactive personal AI assistant, without compromising your system's security. Unlike other local agents that run with unrestricted access to your machine, Clawmini is built from the ground up with **sandboxing**, **human-in-the-loop approvals**, and **strict network isolation**.
 
-- **Persistent, Multi-Agent Chat Sessions:** Maintain separate chats for different tasks, allowing you to converse with multiple agents across multiple conversations.
-- **Safe Concurrency:** Automatically manages state and handles race conditions, queuing background commands safely to prevent file lock issues.
-- **Built-in & Bring-Your-Own UI:** Includes a fast, beautifully designed SvelteKit Web UI to visually manage agents, chats, and monitor real-time execution. Alternatively, easily build and connect your own interfaces to its local API.
-- **Agent Templates:** Quickly scaffold new agents using built-in or custom templates (e.g. `gemini`), automatically merging configuration settings.
-- **Routers & Middleware Pipeline:** Process user messages through an extensible pipeline to dynamically alter content, target specific agents or sessions, and expand slash commands before they reach an agent.
-- **Local File System Storage:** Everything is stored completely locally in `.clawmini/` within your workspace as transparent JSON/JSONL files. No cloud syncing required.
-- **Sandboxed Agent API:** The daemon can optionally expose a secure HTTP server configured via the `api` setting in `.clawmini/settings.json`, allowing remote or containerized access. Give agents a minimal zero-dependency standalone client exported via `clawmini export-lite`. It securely authenticates with the Agent API using dynamically generated HMAC tokens (`CLAW_API_TOKEN`) to allow sandboxed agents to log messages and manage cron jobs without needing direct access to the host's Unix socket.
-- **Proactivity:** Incoming messages or events from various external sources can be proactively routed back to the user or directly to the agent for autonomous handling.
+Bring your favorite CLI agents (Gemini CLI, Claude Code, OpenAI Codex, etc.), and Clawmini provides the memory, the chat support, and the security boundaries.
 
-### Coming Soon
+## Why Clawmini?
 
-- **Human Approval Requests:** When an agent needs permission to execute a sensitive action or requires input, it will pause and ask the user for approval via a dedicated UI or dashboard.
+🛡️ **Zero-Trust Security by Default**
+Run agents safely. Clawmini uses built-in sandboxing (macOS seatbelt or containerized environments) to restrict what your AI can touch. Sensitive actions require your explicit approval before execution.
 
-## Quick Start
+🧠 **Persistent Memory & Proactivity**
+Your agents don't just react; they act. Clawmini allows agents to schedule recurring tasks (cron jobs), maintain long-term context across sessions, and proactively notify you of updates or route messages from external sources.
 
-Assuming you have built and linked the package globally:
+💻 **Beautiful Web UI & Chat App Extensibility**
+No need to stay in the terminal. Manage your agents and chat with them through a fast, built-in Web interface running entirely on `localhost`. Hook up Discord to chat on-the-go, or easily build your adapters against the local API.
+
+🔌 **Bring Your Own Agent**
+Clawmini isn't tied to one model. It orchestrates _any_ CLI-based agent, acting as the secure bridge between the AI and your filesystem.
+
+## Quick Start: Meet Jeeves
+
+Let's set up a secure, sandboxed agent named Jeeves using the Gemini CLI template.
 
 ```bash
-# Initialize a new .clawmini settings folder, create an agent named 'coder' with the 'gemini-cladding' template, and set it as the default chat
-clawmini init --agent coder --agent-template gemini-cladding
+# 1. Install globally
+npm install -g clawmini
 
-# Start the local web interface on http://localhost:8080
+# 2. Initialize a workspace and create your first sandboxed agent
+# For a more OpenClaw-like experience, try the gemini-claw template
+mkdir my-workspace && cd my-workspace
+clawmini init --agent jeeves --agent-template gemini --environment macos
+
+# 3. Start the background daemon
+clawmini up
+
+# 4. Open the Web UI to start chatting!
 clawmini web
 ```
 
-## Command Reference
+**Try asking Jeeves:** _"Summarize the recent changes in my git repository."_ Jeeves will run securely in its sandbox, read the diffs, and report back.
 
-### Initialization & Daemon
+### Common Slash Commands
 
-- `clawmini init`: Initialize a new `.clawmini` configuration folder.
-- `clawmini up`: Start the local daemon server in the background.
-- `clawmini down`: Stop the local daemon server.
-- `clawmini export-lite [--out <path>] [--stdout]`: Export the standalone `clawmini-lite` client script for use in sandboxed environments.
+You can use these built-in slash commands in your chat interfaces:
 
-### Chat Management
+- `/new`: Clear previous context and start a new conversation thread.
+- `/stop`: Stop all running commands and drop any queued messages.
+- `/interrupt [message]`: Interrupt the current thinking, batching together all queued messages and sending them immediately.
+- `/pending`: View any pending permission requests from your agent.
+- `/approve [id]`: Approve a specific pending agent request.
+- `/reject [id]`: Reject a specific pending agent request.
 
-- `clawmini chats list`: Display all existing chats in the workspace.
-- `clawmini chats add <id>`: Create a new chat with the specified identifier.
-- `clawmini chats delete <id>`: Remove a chat and its associated history.
-- `clawmini chats set-default <id>`: Update the globally configured default chat for the workspace.
+### Guides & Integrations
 
-### Messaging
+- [Discord Integration Setup](./docs/guides/discord_adapter_setup.md)
+- [Configuring Permission Requests](./docs/guides/sandbox_policies.md)
 
-- `clawmini messages send <message> [--chat <id>] [--agent <name>]`: Send a message to a specific chat (defaults to the workspace default chat). Use `--agent` to assign a specific agent to handle the message.
-- `clawmini messages tail [-n NUM] [--json] [--chat <id>]`: Display the most recent messages and command logs in a chat.
+## How It Works
 
-### Agents
+**User** ↔️ **Web UI / CLI** ↔️ **Daemon** ↔️ **Sandbox / Environment** ↔️ **Agent**
 
-- `clawmini agents list`: Display all existing agents.
-- `clawmini agents add <id> [-d, --directory <dir>] [-t, --template <name>] [-e, --env <KEY=VALUE>...]`: Create a new agent, optionally setting its working directory, applying a template, and environment variables.
-- `clawmini agents update <id> [-d, --directory <dir>] [-e, --env <KEY=VALUE>...]`: Update an existing agent's configuration.
-- `clawmini agents delete <id>`: Remove an agent.
+The daemon securely authenticates with the Agent API using dynamically generated HMAC tokens (`CLAW_API_TOKEN`), allowing sandboxed agents to operate safely without direct access to the host's Unix socket.
 
-### Cron Jobs
+### Built-in Environments
 
-- `clawmini cron list [--chat <id>]`: Display all cron jobs configured for a chat.
-- `clawmini cron add <name> [--cron <expr> | --every <duration> | --at <iso-time>] [-m, --message <text>]`: Create a new scheduled job. Supports standard cron expressions, recurring intervals (e.g., `10m`), or one-off executions at a specific time.
-- `clawmini cron delete <name> [--chat <id>]`: Remove an existing scheduled job.
+- `cladding` (most secure): A container-based sandbox using [cladding](https://github.com/dstoc/cladding)
+- `macos`: A macOS sandbox environment that restricts write-access to the workspace.
+- `macos-proxy`: A more constrained macOS sandbox that limits network access to an allowlist.
 
-### Web Interface
+### Extensible Pipeline (Routers)
 
-- `clawmini web [-p, --port <number>]`: Start the local web interface (default port: 8080).
+Process user messages before they reach an agent. Dynamically alter content, target specific agents, or expand slash commands (e.g., `/new` to clear context, `/foo` to expand a command script).
 
-## Configuration
+## Next Steps: Build Autonomous Workflows
 
-## Global settings
+Once you're comfortable, Clawmini offers powerful tools for advanced users:
 
-**TODO**
+- **The `gemini-claw` Template:** Scaffold a complete autonomous assistant with built-in memory management (`MEMORY.md`), identity (`SOUL.md`), and heartbeat checks (`HEARTBEAT.md`) for proactive tasking.
+- **`clawmini-lite`:** Deploy agents into heavily restricted containers. Export the minimal, zero-dependency client (`clawmini export-lite`) to securely authenticate with the daemon, allowing the agent to log actions and request permissions without host access.
 
-## Routers
+---
 
-Clawmini provides an extensible pipeline for processing user messages before they reach an agent using **Routers**. By defining a sequence of routers in your `.clawmini/settings.json` (global) or per-chat settings, you can dynamically alter message content, target specific agents or sessions, inject environment variables, and add automated replies.
+## Documentation & References
 
-Built-in routers include:
-
-- `@clawmini/slash-new`: Creates a new session ID when a message starts with `/new`, effectively clearing the context window for the agent.
-- `@clawmini/slash-command`: Expands slash commands (e.g., `/foo`) with the contents of matching files in your `.clawmini/commands/` directory.
-
-You can also write custom shell script routers that accept the current state via `stdin` and output JSON to dynamically control the routing logic. See the [`RouterState` interface](src/daemon/routers/types.ts) for the exact input and output schema.
-
-## Agent Templates
-
-Clawmini provides built-in templates to help you quickly scaffold new agents with pre-configured settings and files. When you run `clawmini agents add <id> --template <name>`, it copies the template's files into the agent's working directory and merges any provided environment variables or directory options with the template's `settings.json`.
-
-The currently available built-in templates are:
-
-- `gemini`: A basic template configured to use the `gemini` CLI as the agent's backend.
-- `gemini-cladding`: A template configured to run the `gemini` CLI wrapped inside `cladding` for enhanced security.
-- `gemini-claw-cladding`: A comprehensive template that sets up an autonomous personal assistant workspace (OpenClaw). It includes the `gemini-cladding` setup plus a full suite of scaffolding files like `GEMINI.md`, `SOUL.md`, `MEMORY.md`, and `HEARTBEAT.md` to establish the agent's identity, memory, and proactive capabilities.
+For a full list of commands for managing chats, messages, agents, background jobs, and environments, please see the [CLI Command Reference](./docs/CLI_REFERENCE.md).
 
 ## Development Setup
 
@@ -103,35 +96,25 @@ Clawmini is a monorepo consisting of a Node.js TypeScript CLI/Daemon and an embe
 - Node.js (v18+)
 - npm
 
-### Setup
+### Setup & Scripts
 
 ```bash
-# Install dependencies for both the root CLI and the web workspace
+# Install dependencies and build the project
 npm install
-
-# Build the CLI, Daemon, and statically compile the Web UI
 npm run build
-```
 
-### Development Scripts
-
-During development, you can run the following commands from the root:
-
-```bash
-# Watch mode for the CLI
+# Development Watch Modes
 npm run dev:cli
-
-# Watch mode for the Daemon
 npm run dev:daemon
 
-# Run formatting, linting, type-checking, and tests
+# Linting & Testing
 npm run format
 npm run lint
 npm run check
 npm run test
 ```
 
-## Architecture Notes
+**Architecture Notes:**
 
 - **Separation of Concerns:** The daemon (`src/daemon`) acts as the stateful orchestrator and queue manager, while the CLI (`src/cli`) is simply a thin TRPC client connecting via a UNIX socket.
-- **Web UI:** The `web/` directory is a SvelteKit application built with `@sveltejs/adapter-static`. Running `npm run build` bundles the web UI into `dist/web`, which is then served statically by the `clawmini web` Node.js server. Real-time updates to the web UI are powered by Server-Sent Events (SSE) tailing the local `.clawmini/chats/:id/chat.jsonl` files.
+- **Web UI:** The `web/` directory is a SvelteKit application built with `@sveltejs/adapter-static`. Running `npm run build` bundles the web UI into `dist/web`, which is served statically by the `clawmini web` Node.js server. Real-time updates use Server-Sent Events (SSE) tailing local `.clawmini/chats/:id/chat.jsonl` files.
