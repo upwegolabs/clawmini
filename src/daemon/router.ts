@@ -10,7 +10,11 @@ import {
   writeChatSettings,
   getAgent,
   getWorkspaceRoot,
+  readPolicies,
+  getClawminiDir,
 } from '../shared/workspace.js';
+import { PolicyRequestService } from './policy-request-service.js';
+import { RequestStore } from './request-store.js';
 import { CronJobSchema } from '../shared/config.js';
 import { handleUserMessage } from './message.js';
 import { getDefaultChatId, getMessages } from './chats.js';
@@ -424,6 +428,81 @@ const AppRouter = router({
         return { success: true, deleted: true };
       }
       return { success: true, deleted: false };
+    }),
+  listPolicies: apiProcedure.query(async () => {
+    return await readPolicies();
+  }),
+  executePolicyHelp: apiProcedure
+    .input(z.object({ commandName: z.string() }))
+    .query(async ({ input }) => {
+      const config = await readPolicies();
+      const policy = config?.policies?.[input.commandName];
+
+      if (!policy) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Policy not found: ${input.commandName}`,
+        });
+      }
+
+      if (!policy.allowHelp) {
+        return { stdout: '', stderr: 'This command does not support --help\n', exitCode: 1 };
+      }
+
+      const { executeSafe } = await import('./policy-utils.js');
+      const fullArgs = [...(policy.args || []), '--help'];
+      const { stdout, stderr, exitCode } = await executeSafe(policy.command, fullArgs, {
+        cwd: getWorkspaceRoot(),
+      });
+
+      return { stdout, stderr, exitCode };
+    }),
+  createPolicyRequest: apiProcedure
+    .input(
+      z.object({
+        commandName: z.string(),
+        args: z.array(z.string()),
+        fileMappings: z.record(z.string(), z.string()),
+        chatId: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const workspaceRoot = getWorkspaceRoot(process.cwd());
+      const snapshotDir = path.join(getClawminiDir(process.cwd()), 'tmp', 'snapshots');
+      const store = new RequestStore(process.cwd());
+      const agentDir = await resolveAgentDir(ctx.tokenPayload?.agentId, workspaceRoot);
+      const service = new PolicyRequestService(store, agentDir, snapshotDir);
+
+      const chatId = await resolveAndCheckChatId(ctx, input.chatId);
+      const agentId = ctx.tokenPayload?.agentId ?? 'unknown';
+
+      const request = await service.createRequest(
+        input.commandName,
+        input.args,
+        input.fileMappings,
+        chatId,
+        agentId
+      );
+
+      const { generateRequestPreview } = await import('./policy-utils.js');
+      const previewContent = await generateRequestPreview(request);
+
+      const logMsg = {
+        id: (await import('node:crypto')).randomUUID(),
+        // TODO: we should store the message ID in the CLAW_API_TOKEN, and extract it here
+        messageId: (await import('node:crypto')).randomUUID(),
+        role: 'log' as const,
+        source: 'router' as const,
+        content: previewContent,
+        stderr: '',
+        timestamp: new Date().toISOString(),
+        command: 'policy-request',
+        cwd: process.cwd(),
+        exitCode: 0,
+      };
+
+      await import('./chats.js').then((m) => m.appendMessage(chatId, logMsg));
+      return request;
     }),
 });
 

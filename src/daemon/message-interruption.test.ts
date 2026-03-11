@@ -31,6 +31,7 @@ describe('Interruption flow in message handler', () => {
 
     const state: RouterState = {
       message: 'stop everything',
+      messageId: 'mock-msg-id',
       chatId: 'chat1',
       action: 'stop',
     };
@@ -71,6 +72,7 @@ describe('Interruption flow in message handler', () => {
 
     const state: RouterState = {
       message: 'new urgent task',
+      messageId: 'mock-msg-id',
       chatId: 'chat1',
       action: 'interrupt',
     };
@@ -103,6 +105,7 @@ describe('Interruption flow in message handler', () => {
     const queue = getQueue('/test-interrupt-empty');
     const state: RouterState = {
       message: '   ',
+      messageId: 'mock-msg-id',
       chatId: 'chat1',
     };
 

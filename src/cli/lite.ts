@@ -156,4 +156,92 @@ jobs
     }
   });
 
+const requests = program.command('requests').description('Manage sandbox policy requests');
+
+requests
+  .command('list')
+  .description('List available policies')
+  .action(async () => {
+    try {
+      const client = getClient();
+      const config = await client.listPolicies.query();
+
+      if (!config || !config.policies || Object.keys(config.policies).length === 0) {
+        console.log('No policies configured.');
+        return;
+      }
+
+      console.log('Available Policies:\n');
+      for (const [name, policy] of Object.entries(config.policies)) {
+        console.log(`- ${name}`);
+        if (policy.description) {
+          console.log(`  Description: ${policy.description}`);
+        }
+      }
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('request <cmd>')
+  .description('Submit a sandbox policy request')
+  .option('--help', 'Execute the underlying command with --help and print the output')
+  .option('-f, --file <mappings...>', 'File mappings in the format name=path')
+  .allowUnknownOption()
+  .allowExcessArguments(true)
+  .helpOption('-h, --cli-help', 'display CLI help for command')
+  .action(async (cmdName, options, command) => {
+    try {
+      const client = getClient();
+      const config = await client.listPolicies.query();
+      const policy = config?.policies?.[cmdName];
+
+      if (!policy) {
+        throw new Error(`Policy not found: ${cmdName}`);
+      }
+
+      if (options.help) {
+        // Execute underlying command with --help via the daemon
+        const helpOutput = await client.executePolicyHelp.query({ commandName: cmdName });
+        if (helpOutput.stdout) {
+          process.stdout.write(helpOutput.stdout);
+        }
+        if (helpOutput.stderr) {
+          process.stderr.write(helpOutput.stderr);
+        }
+        process.exit(helpOutput.exitCode);
+      }
+
+      const dashDashIndex = process.argv.indexOf('--');
+      const opaqueArgs =
+        dashDashIndex !== -1 ? process.argv.slice(dashDashIndex + 1) : command.args.slice(1);
+
+      const fileMappings: Record<string, string> = {};
+      if (options.file) {
+        for (const mapping of options.file) {
+          const [name, ...pathParts] = mapping.split('=');
+          const pathStr = pathParts.join('=');
+          if (!name || !pathStr) {
+            throw new Error(`Invalid file mapping: ${mapping}. Expected format name=path`);
+          }
+          fileMappings[name] = pathStr;
+        }
+      }
+
+      const request = await client.createPolicyRequest.mutate({
+        commandName: cmdName,
+        args: opaqueArgs,
+        fileMappings,
+      });
+
+      console.log(`Request created successfully.`);
+      console.log(`Request ID: ${request.id}`);
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
 program.parse(process.argv);

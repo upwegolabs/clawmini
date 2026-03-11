@@ -21,6 +21,10 @@ vi.mock('./routers/slash-interrupt.js', () => ({
   slashInterrupt: vi.fn((state: RouterState) => ({ ...state, action: 'interrupt' })),
 }));
 
+vi.mock('./routers/slash-policies.js', () => ({
+  slashPolicies: vi.fn(async (state: RouterState) => state),
+}));
+
 describe('Router Pipeline Execution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -33,6 +37,7 @@ describe('Router Pipeline Execution', () => {
   it('should pass state unchanged when no routers are provided', async () => {
     const initialState: RouterState = {
       message: 'hello',
+      messageId: 'mock-msg-id',
       chatId: 'chat-1',
     };
     const finalState = await executeRouterPipeline(initialState, []);
@@ -42,6 +47,7 @@ describe('Router Pipeline Execution', () => {
   it('should call built-in @clawmini/slash-new router', async () => {
     const initialState: RouterState = {
       message: 'hello',
+      messageId: 'mock-msg-id',
       chatId: 'chat-1',
     };
     const finalState = await executeRouterPipeline(initialState, ['@clawmini/slash-new']);
@@ -52,6 +58,7 @@ describe('Router Pipeline Execution', () => {
   it('should call built-in @clawmini/slash-command router', async () => {
     const initialState: RouterState = {
       message: 'hello',
+      messageId: 'mock-msg-id',
       chatId: 'chat-1',
     };
     const finalState = await executeRouterPipeline(initialState, ['@clawmini/slash-command']);
@@ -61,6 +68,7 @@ describe('Router Pipeline Execution', () => {
   it('should call built-in @clawmini/slash-stop router', async () => {
     const initialState: RouterState = {
       message: 'hello',
+      messageId: 'mock-msg-id',
       chatId: 'chat-1',
     };
     const finalState = await executeRouterPipeline(initialState, ['@clawmini/slash-stop']);
@@ -70,6 +78,7 @@ describe('Router Pipeline Execution', () => {
   it('should call built-in @clawmini/slash-interrupt router', async () => {
     const initialState: RouterState = {
       message: 'hello',
+      messageId: 'mock-msg-id',
       chatId: 'chat-1',
     };
     const finalState = await executeRouterPipeline(initialState, ['@clawmini/slash-interrupt']);
@@ -79,6 +88,7 @@ describe('Router Pipeline Execution', () => {
   it('should execute custom shell command router and merge state correctly', async () => {
     const initialState: RouterState = {
       message: 'hello',
+      messageId: 'mock-msg-id',
       chatId: 'chat-1',
       env: { FOO: 'bar' },
     };
@@ -113,6 +123,7 @@ describe('Router Pipeline Execution', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const initialState: RouterState = {
       message: 'hello',
+      messageId: 'mock-msg-id',
       chatId: 'chat-1',
     };
 

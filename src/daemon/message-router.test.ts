@@ -43,6 +43,7 @@ describe('Router Pipeline Execution', () => {
 
     vi.mocked(executeRouterPipeline).mockResolvedValueOnce({
       message: 'hello new message',
+      messageId: 'mock-msg-id',
       chatId: 'chat-router',
       agentId: 'new-agent',
       sessionId: 'new-session',
