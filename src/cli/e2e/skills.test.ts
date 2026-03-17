@@ -6,7 +6,7 @@ const { runCli, setupE2E, teardownE2E } = createE2EContext('e2e-tmp-skills');
 describe('E2E Skills Tests', () => {
   beforeAll(async () => {
     await setupE2E();
-    await runCli(['init']);
+    await runCli(['init', '--agent', 'test-agent']);
   }, 30000);
 
   afterAll(teardownE2E, 30000);
@@ -19,5 +19,25 @@ describe('E2E Skills Tests', () => {
     // Let's just ensure it executes successfully.
     expect(stderr).toBe('');
     expect(stdout.length).toBeGreaterThan(0);
+  });
+
+  it('should add a specific skill', async () => {
+    const { stdout, code, stderr } = await runCli(['skills', 'add', 'skill-creator', '--agent', 'test-agent']);
+    expect(stderr).toBe('');
+    expect(code).toBe(0);
+    expect(stdout).toContain("Successfully added skill 'skill-creator'");
+  });
+
+  it('should add all skills when no skill name is provided', async () => {
+    const { stdout, code, stderr } = await runCli(['skills', 'add', '--agent', 'test-agent']);
+    expect(stderr).toBe('');
+    expect(code).toBe(0);
+    expect(stdout).toContain("Successfully added all skills to agent");
+  });
+
+  it('should handle adding an invalid skill gracefully', async () => {
+    const { code, stderr } = await runCli(['skills', 'add', 'invalid-skill-name-123', '--agent', 'test-agent']);
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("Failed to add skill:");
   });
 });

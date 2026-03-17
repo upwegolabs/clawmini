@@ -34,4 +34,22 @@
 - **Verification**: 
   - Write unit tests for the `skills add` command, verifying correct copying, overwriting, and error handling for missing skills/agents.
   - Run `npm run validate`.
-- **Status**: Not Started
+- **Status**: Completed
+
+## Identified Issues
+
+### 1. Implement `clawmini skills add` Command (High Priority)
+- **Description**: Add the `skills add [skill-name]` CLI command as described in Step 5. It must support copying the specified skill folder from `templates/skills/<skill-name>` into the agent's resolved skills directory. If `[skill-name]` is omitted, copy all skills. It must completely overwrite the target skill directory if it exists. Include an optional `--agent <agentId>` flag (defaulting to the `default` agent or active environment). Handle errors like "Skill not found" and "Agent not found" clearly.
+- **Verification**: Write unit tests, run `npm run validate`.
+- **Status**: Completed
+
+### 2. Support Overwriting in `copyTemplateBase` (High Priority)
+- **Description**: `copyTemplateBase` currently throws if the target directory is not empty. The `skills add` command requires overwriting. We must update `copyTemplateBase` and related functions (like `copyAgentSkills`) to accept an `overwrite` boolean parameter, adjusting the directory checks and `fsPromises.cp` options (`force: true`).
+- **Verification**: Ensure existing tests pass and `npm run validate`.
+- **Status**: Completed
+
+### 3. Cleanup `skills list` error handling (Low Priority)
+- **Description**: `skills list` silently returns on `ENOENT`. It should ideally use standard logging, though it's acceptable. The primary focus is code cleanliness.
+- **Verification**: Run `npm run validate`.
+- **Status**: Completed
+
