@@ -14,7 +14,7 @@
 - Run `npm run validate` to ensure all checks pass.
 
 ## Milestone 2: Independent Subagent Execution and Bypassing Routers
-**Status:** Not Started
+**Status:** Complete
 
 **Tasks:**
 - Modify execution flow so that messages sent to a subagent ID bypass the standard `executeRouterPipeline` and directly invoke `executeDirectMessage`.

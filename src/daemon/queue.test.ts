@@ -130,7 +130,10 @@ describe('Queue', () => {
 
     const task1 = queue1.enqueue(async (signal) => {
       return new Promise<void>((resolve, reject) => {
-        const onAbort = () => { aborted1 = true; reject(signal.reason); };
+        const onAbort = () => {
+          aborted1 = true;
+          reject(signal.reason);
+        };
         signal.addEventListener('abort', onAbort);
         setTimeout(resolve, 50);
       });
@@ -138,7 +141,10 @@ describe('Queue', () => {
 
     const task2 = queue2.enqueue(async (signal) => {
       return new Promise<void>((resolve, reject) => {
-        const onAbort = () => { aborted2 = true; reject(signal.reason); };
+        const onAbort = () => {
+          aborted2 = true;
+          reject(signal.reason);
+        };
         signal.addEventListener('abort', onAbort);
         setTimeout(resolve, 50);
       });
@@ -146,7 +152,10 @@ describe('Queue', () => {
 
     const task3 = queue3.enqueue(async (signal) => {
       return new Promise<void>((resolve, reject) => {
-        const onAbort = () => { aborted3 = true; reject(signal.reason); };
+        const onAbort = () => {
+          aborted3 = true;
+          reject(signal.reason);
+        };
         signal.addEventListener('abort', onAbort);
         setTimeout(resolve, 50);
       });

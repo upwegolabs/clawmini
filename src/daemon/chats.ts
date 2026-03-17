@@ -17,6 +17,7 @@ export {
   getChatsDir,
   getChatRelativePath,
   isValidChatId,
+  isSubagentChatId,
   createChat,
   listChats,
   deleteChat,

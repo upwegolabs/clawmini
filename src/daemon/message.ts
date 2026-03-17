@@ -1,6 +1,13 @@
 /* eslint-disable max-lines */
 import path from 'node:path';
-import { appendMessage, type UserMessage, type CommandLogMessage } from './chats.js';
+import {
+  appendMessage,
+  type UserMessage,
+  type CommandLogMessage,
+  isSubagentChatId,
+  getChatsDir,
+  getChatRelativePath,
+} from './chats.js';
 import { getMessageQueue } from './queue.js';
 import { executeRouterPipeline } from './routers.js';
 import type { RouterState } from './routers/types.js';
@@ -215,7 +222,12 @@ export async function executeDirectMessage(
     return;
   }
 
-  const queue = getMessageQueue(cwd);
+  let queueDir = cwd;
+  if (isSubagentChatId(chatId)) {
+    const chatsDir = await getChatsDir(cwd);
+    queueDir = path.join(chatsDir, getChatRelativePath(chatId));
+  }
+  const queue = getMessageQueue(queueDir);
 
   if (state.action === 'stop') {
     queue.abortCurrent();
@@ -510,6 +522,32 @@ export async function executeDirectMessage(
       if (lastLogMsg) {
         await appendMessage(chatId, lastLogMsg);
       }
+
+      if (isSubagentChatId(chatId)) {
+        const parts = chatId.split(':');
+        const parentChatId = parts[0] as string;
+        const subagentUuid = parts[2] as string;
+        const statusStr = success ? 'completed' : 'encountered an error in';
+
+        let originalMessageSnippet = state.message;
+        if (originalMessageSnippet.length > 200) {
+          originalMessageSnippet = originalMessageSnippet.substring(0, 200) + '...';
+        }
+
+        const notificationMsg: CommandLogMessage = {
+          id: crypto.randomUUID(),
+          messageId: userMsg.id,
+          role: 'log',
+          source: 'router',
+          content: `[Automatic message] Sub-agent ${subagentUuid} (${agentId}) has ${statusStr} its task.\n\n### Original Request\n${originalMessageSnippet}\n\n### Final Output\n${lastLogMsg?.content || lastLogMsg?.stderr || ''}`,
+          stderr: '',
+          timestamp: new Date().toISOString(),
+          command: 'subagent-completion',
+          cwd: cwd,
+          exitCode: success ? 0 : 1,
+        };
+        await appendMessage(parentChatId, notificationMsg);
+      }
     },
     { text: state.message, sessionId: state.sessionId || 'default' }
   );
@@ -569,6 +607,18 @@ export async function handleUserMessage(
   if (overrideAgentId && chatSettings.defaultAgent !== overrideAgentId) {
     chatSettings.defaultAgent = overrideAgentId;
     await writeChatSettings(chatId, chatSettings, cwd);
+  }
+
+  if (isSubagentChatId(chatId)) {
+    const initialState = await getInitialRouterState(
+      chatId,
+      message,
+      cwd,
+      overrideAgentId,
+      sessionId
+    );
+    await executeDirectMessage(chatId, initialState, settings, cwd, runCommand, noWait, message);
+    return;
   }
 
   const initialState = await getInitialRouterState(

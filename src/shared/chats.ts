@@ -39,6 +39,11 @@ export async function getChatsDir(startDir = process.cwd()): Promise<string> {
   return dir;
 }
 
+export function isSubagentChatId(chatId: string): boolean {
+  if (!chatId || chatId.length === 0) return false;
+  return /^[a-zA-Z0-9_-]+:subagents:[a-zA-Z0-9_-]+$/.test(chatId);
+}
+
 export function isValidChatId(chatId: string): boolean {
   if (!chatId || chatId.length === 0) return false;
   // Standard chat ID
