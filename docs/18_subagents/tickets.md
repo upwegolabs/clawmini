@@ -43,7 +43,7 @@
 - Run `npm run validate`.
 
 ## Milestone 4: CLI Interface (`clawmini-lite subagents`)
-**Status:** Not Started
+**Status:** Complete
 
 **Tasks:**
 - Add a new `subagents` command to the `clawmini-lite` CLI.

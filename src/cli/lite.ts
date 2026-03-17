@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable max-lines */
 
 import { Command } from 'commander';
 import { createTRPCClient, httpLink } from '@trpc/client';
@@ -266,6 +267,100 @@ program
         console.log(`Request created successfully.`);
         console.log(`Request ID: ${request.id}`);
       }
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+const subagents = program.command('subagents').description('Manage subagents');
+
+subagents
+  .command('add <message>')
+  .description('Add a subagent')
+  .option('-a, --agent <name>', 'Agent name')
+  .option('-c, --chat <chatId>', 'Parent chat ID')
+  .action(async (message, options) => {
+    try {
+      const client = getClient();
+      const result = await client.subagents.add.mutate({
+        message,
+        agentId: options.agent,
+        parentChatId: options.chat,
+      });
+      console.log(`Subagent created with ID: ${result.subagentId}`);
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+subagents
+  .command('list')
+  .description('List subagents')
+  .option('-c, --chat <chatId>', 'Parent chat ID')
+  .action(async (options) => {
+    try {
+      const client = getClient();
+      const list = await client.subagents.list.query({ parentChatId: options.chat });
+      console.log(JSON.stringify(list, null, 2));
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+subagents
+  .command('tail <id>')
+  .description('Tail a subagent')
+  .option('-n, --lines <number>', 'Number of lines to tail', parseInt)
+  .action(async (id, options) => {
+    try {
+      const client = getClient();
+      const messages = await client.subagents.tail.query({ subagentId: id, limit: options.lines });
+      console.log(JSON.stringify(messages, null, 2));
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+subagents
+  .command('send <id> <message>')
+  .description('Send a message to a subagent')
+  .action(async (id, message) => {
+    try {
+      const client = getClient();
+      await client.subagents.send.mutate({ subagentId: id, message });
+      console.log('Message sent.');
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+subagents
+  .command('stop <id>')
+  .description('Stop a subagent')
+  .action(async (id) => {
+    try {
+      const client = getClient();
+      await client.subagents.stop.mutate({ subagentId: id });
+      console.log('Subagent stopped.');
+    } catch (err) {
+      console.error('Error:', err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+subagents
+  .command('delete <id>')
+  .description('Delete a subagent')
+  .action(async (id) => {
+    try {
+      const client = getClient();
+      await client.subagents.delete.mutate({ subagentId: id });
+      console.log('Subagent deleted.');
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
       process.exit(1);

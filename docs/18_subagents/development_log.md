@@ -22,3 +22,11 @@
 - Hooked up `subagentRouter` directly onto `userRouter` as a nested `subagents` property.
 - Added comprehensive unit tests in `src/daemon/api/subagent-router.test.ts`.
 - Validated with `npm run validate`.
+
+## Completed Task: Milestone 4 - CLI Interface (`clawmini-lite subagents`)
+
+- Added `subagents` command and subcommands (`add`, `list`, `tail`, `send`, `stop`, `delete`) to `src/cli/lite.ts` to be used by `clawmini-lite`.
+- Exported `subagentRouter` in `AgentRouter` to expose subagents capabilities to spawned agents via the proxy API.
+- Modified `initDaemon` in `src/daemon/index.ts` to update `settings.json` with the assigned dynamic port when `apiCtx.port` is `0`, fixing `EADDRINUSE` failures in parallel e2e tests where multiple daemons allocate a random port.
+- Added E2E tests in `src/cli/e2e/subagents-lite.test.ts` to verify the functionality of `clawmini-lite subagents`.
+- Verified changes with `npm run validate`.

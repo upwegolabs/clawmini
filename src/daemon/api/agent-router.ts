@@ -205,6 +205,7 @@ export const createPolicyRequest = apiProcedure
   });
 
 import { ping } from './user-router.js';
+import { subagentRouter } from './subagent-router.js';
 
 export const fetchPendingMessages = apiProcedure.mutation(async ({ ctx }) => {
   const cwd = process.cwd();
@@ -228,6 +229,7 @@ export const agentRouter = router({
   createPolicyRequest,
   fetchPendingMessages,
   ping,
+  subagents: subagentRouter,
 });
 
 export type AgentRouter = typeof agentRouter;
