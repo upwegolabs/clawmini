@@ -15,6 +15,7 @@ export {
   type UserMessage,
   type CommandLogMessage,
   getChatsDir,
+  getChatRelativePath,
   isValidChatId,
   createChat,
   listChats,

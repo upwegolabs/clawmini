@@ -1,7 +1,7 @@
 # Subagents Feature Tickets
 
 ## Milestone 1: Core Storage and Path Resolution for Subagents
-**Status:** Not Started
+**Status:** Complete
 
 **Tasks:**
 - Update chat ID validation (`isValidChatId`) to support the `{parentChatId}:subagents:{subagentUuid}` format securely, preventing directory traversal.

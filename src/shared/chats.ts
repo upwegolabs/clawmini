@@ -41,7 +41,11 @@ export async function getChatsDir(startDir = process.cwd()): Promise<string> {
 
 export function isValidChatId(chatId: string): boolean {
   if (!chatId || chatId.length === 0) return false;
-  return /^[a-zA-Z0-9_-]+$/.test(chatId);
+  // Standard chat ID
+  if (/^[a-zA-Z0-9_-]+$/.test(chatId)) return true;
+  // Subagent chat ID: parentChatId:subagents:subagentUuid
+  if (/^[a-zA-Z0-9_-]+:subagents:[a-zA-Z0-9_-]+$/.test(chatId)) return true;
+  return false;
 }
 
 function assertValidChatId(id: string): void {
@@ -50,10 +54,20 @@ function assertValidChatId(id: string): void {
   }
 }
 
+export function getChatRelativePath(id: string): string {
+  if (id.includes(':subagents:')) {
+    const parts = id.split(':');
+    if (parts.length === 3 && parts[1] === 'subagents') {
+      return path.join(parts[0] as string, 'subagents', parts[2] as string);
+    }
+  }
+  return id;
+}
+
 export async function createChat(id: string, startDir = process.cwd()): Promise<void> {
   assertValidChatId(id);
   const chatsDir = await getChatsDir(startDir);
-  const chatDir = path.join(chatsDir, id);
+  const chatDir = path.join(chatsDir, getChatRelativePath(id));
   if (!existsSync(chatDir)) {
     await fs.mkdir(chatDir, { recursive: true });
   }
@@ -76,7 +90,7 @@ export async function listChats(startDir = process.cwd()): Promise<string[]> {
 export async function deleteChat(id: string, startDir = process.cwd()): Promise<void> {
   assertValidChatId(id);
   const chatsDir = await getChatsDir(startDir);
-  const chatDir = path.join(chatsDir, id);
+  const chatDir = path.join(chatsDir, getChatRelativePath(id));
 
   if (!pathIsInsideDir(chatDir, chatsDir)) {
     throw new Error(`Security Error: Cannot delete chat directory outside of ${chatsDir}`);
@@ -94,7 +108,7 @@ export async function appendMessage(
 ): Promise<void> {
   assertValidChatId(id);
   const chatsDir = await getChatsDir(startDir);
-  const chatDir = path.join(chatsDir, id);
+  const chatDir = path.join(chatsDir, getChatRelativePath(id));
   if (!existsSync(chatDir)) {
     await createChat(id, startDir);
   }
@@ -109,7 +123,7 @@ export async function getMessages(
 ): Promise<ChatMessage[]> {
   assertValidChatId(id);
   const chatsDir = await getChatsDir(startDir);
-  const chatFile = path.join(chatsDir, id, 'chat.jsonl');
+  const chatFile = path.join(chatsDir, getChatRelativePath(id), 'chat.jsonl');
   if (!existsSync(chatFile)) {
     throw new Error(`Chat directory or file for '${id}' not found.`);
   }
