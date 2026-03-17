@@ -25,3 +25,12 @@
 - Fixed test paths to correctly map against the `testDir`.
 - Ran `npm run validate` to ensure formatting, linting, and tests all passed.
 - Marked Step 3 as completed in `tickets.md`.
+
+## Started: Implement `clawmini skills list` Command (Step 4)
+- Added `src/cli/commands/skills.ts` utilizing `commander`.
+- Implemented `skills list` using `fsPromises.readdir` on the `skillsDir` resolved by `resolveSkillsTemplatePath`.
+- Registered `skillsCmd` in `src/cli/index.ts`.
+- Wrote an e2e test in `src/cli/e2e/skills.test.ts` to ensure it outputs available skills correctly.
+- Addressed TypeScript error (`fsPromises.Dirent` not existing, imported `Dirent` from `fs`) and disabled explicit any linter warning for error code checking.
+- Ran `npm run validate` again and confirmed all tests passed successfully.
+- Marked Step 4 as completed in `tickets.md`.

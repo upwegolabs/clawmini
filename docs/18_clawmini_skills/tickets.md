@@ -27,7 +27,7 @@
 - **Verification**: 
   - Write unit tests for the `skills list` command.
   - Run `npm run validate`.
-- **Status**: Not Started
+- **Status**: Completed
 
 ## Step 5: Implement `clawmini skills add` Command
 - **Description**: Add the `skills add [skill-name]` CLI command. It must support copying the specified skill folder from `templates/skills/<skill-name>` into the agent's resolved skills directory. If `[skill-name]` is omitted, copy all skills. It must completely overwrite the target skill directory if it exists. Include an optional `--agent <agentId>` flag (defaulting to the `default` agent or active environment). Handle errors like "Skill not found" and "Agent not found" clearly.
