@@ -27,7 +27,7 @@
 - Run `npm run validate`.
 
 ## Milestone 3: TRPC Subagent Procedures
-**Status:** Not Started
+**Status:** Complete
 
 **Tasks:**
 - Create a new TRPC router for subagents (or extend the existing agent router) in the daemon API.

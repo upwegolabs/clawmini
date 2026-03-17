@@ -14,3 +14,11 @@
 - Added a completion notification hook at the end of `queue.enqueue` to append success/failure status and output back to the parent chat.
 - Fixed existing test mocks across `src/daemon/message-*.test.ts` to preserve `chats.js` module exports (specifically the newly added `isSubagentChatId`).
 - Added tests in `src/daemon/message-subagent.test.ts` covering router bypassing and completion log messages.
+
+## Completed Task: Milestone 3 - TRPC Subagent Procedures
+
+- Created a new `subagent-router.ts` in `src/daemon/api`.
+- Implemented `add`, `list`, `tail`, `send`, `stop`, `delete` procedures.
+- Hooked up `subagentRouter` directly onto `userRouter` as a nested `subagents` property.
+- Added comprehensive unit tests in `src/daemon/api/subagent-router.test.ts`.
+- Validated with `npm run validate`.
