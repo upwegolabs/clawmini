@@ -83,7 +83,7 @@ describe('Subagent Router', () => {
         undefined,
         true, // noWait
         expect.any(Function),
-        undefined,
+        expect.any(String), // sessionId
         'my-agent'
       );
     });

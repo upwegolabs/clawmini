@@ -13,7 +13,7 @@ import {
 } from '../chats.js';
 import { abortQueuesForDirPrefix } from '../queue.js';
 import { handleUserMessage } from '../message.js';
-import { readSettings } from '../../shared/workspace.js';
+import { readSettings, writeChatSettings } from '../../shared/workspace.js';
 import { runCommand } from '../utils/spawn.js';
 
 export const subagentAdd = apiProcedure
@@ -29,6 +29,16 @@ export const subagentAdd = apiProcedure
     const subagentUuid = randomUUID();
     const subagentChatId = `${parentChatId}:subagents:${subagentUuid}`;
 
+    const agentId = input.agent || ctx.tokenPayload.agentId;
+    const sessionId = randomUUID();
+
+    await writeChatSettings(subagentChatId, {
+      defaultAgent: agentId,
+      sessions: {
+        [agentId]: sessionId,
+      },
+    });
+
     const settings = ((await readSettings()) as Record<string, unknown> | null) ?? {};
 
     await handleUserMessage(
@@ -38,8 +48,8 @@ export const subagentAdd = apiProcedure
       undefined,
       true, // noWait
       (args) => runCommand({ ...args, logToTerminal: true }),
-      undefined,
-      input.agent || ctx.tokenPayload.agentId
+      sessionId,
+      agentId
     );
 
     return { subagentId: subagentUuid };
