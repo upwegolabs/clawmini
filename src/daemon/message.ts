@@ -6,8 +6,6 @@ import {
   type CommandLogMessage,
   isSubagentChatId,
   parseSubagentChatId,
-  getChatsDir,
-  getChatRelativePath,
 } from './chats.js';
 import { getMessageQueue } from './queue.js';
 import { executeRouterPipeline } from './routers.js';

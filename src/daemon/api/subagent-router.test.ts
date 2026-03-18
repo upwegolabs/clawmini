@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { subagentRouter } from './subagent-router.js';
 import * as chats from '../chats.js';
@@ -104,10 +105,7 @@ describe('Subagent Router', () => {
       const caller = subagentRouter.createCaller(mockCtx as any);
       const result = await caller.list();
 
-      expect(result).toEqual([
-        { id: 'uuid-1' },
-        { id: 'uuid-2' },
-      ]);
+      expect(result).toEqual([{ id: 'uuid-1' }, { id: 'uuid-2' }]);
     });
   });
 
@@ -128,7 +126,9 @@ describe('Subagent Router', () => {
     it('should throw if subagent ID format is invalid after composition', async () => {
       vi.mocked(chats.isSubagentChatId).mockReturnValue(false);
       const caller = subagentRouter.createCaller(mockCtx as any);
-      await expect(caller.tail({ subagentId: 'invalid-id' })).rejects.toThrow('Invalid subagent ID');
+      await expect(caller.tail({ subagentId: 'invalid-id' })).rejects.toThrow(
+        'Invalid subagent ID'
+      );
     });
   });
 
@@ -136,7 +136,7 @@ describe('Subagent Router', () => {
     it('should send a message to a subagent and trigger execution', async () => {
       vi.mocked(chats.isSubagentChatId).mockReturnValue(true);
       vi.mocked(fs.stat).mockResolvedValue({} as any);
-      
+
       const caller = subagentRouter.createCaller(mockCtx as any);
       await caller.send({ subagentId: 'uuid1', message: 'next step' });
 

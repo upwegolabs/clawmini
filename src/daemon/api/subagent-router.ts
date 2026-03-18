@@ -44,22 +44,19 @@ export const subagentAdd = apiProcedure
     return { subagentId: subagentUuid };
   });
 
-export const subagentList = apiProcedure
-  .query(async ({ ctx }) => {
-    if (!ctx.tokenPayload) throw new TRPCError({ code: 'UNAUTHORIZED' });
-    const parentChatId = ctx.tokenPayload.chatId;
-    const chatsDir = await getChatsDir();
-    const subagentsDir = path.join(chatsDir, getChatRelativePath(parentChatId), 'subagents');
+export const subagentList = apiProcedure.query(async ({ ctx }) => {
+  if (!ctx.tokenPayload) throw new TRPCError({ code: 'UNAUTHORIZED' });
+  const parentChatId = ctx.tokenPayload.chatId;
+  const chatsDir = await getChatsDir();
+  const subagentsDir = path.join(chatsDir, getChatRelativePath(parentChatId), 'subagents');
 
-    try {
-      const entries = await fs.readdir(subagentsDir, { withFileTypes: true });
-      return entries
-        .filter((e) => e.isDirectory())
-        .map((e) => ({ id: e.name }));
-    } catch {
-      return [];
-    }
-  });
+  try {
+    const entries = await fs.readdir(subagentsDir, { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory()).map((e) => ({ id: e.name }));
+  } catch {
+    return [];
+  }
+});
 
 export const subagentTail = apiProcedure
   .input(z.object({ subagentId: z.string(), limit: z.number().optional().default(10) }))
@@ -71,7 +68,7 @@ export const subagentTail = apiProcedure
     if (!isSubagentChatId(fullSubagentId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid subagent ID' });
     }
-    
+
     const chatsDir = await getChatsDir();
     const subagentDir = path.join(chatsDir, getChatRelativePath(fullSubagentId));
     try {
@@ -103,7 +100,7 @@ export const subagentSend = apiProcedure
     if (!isSubagentChatId(fullSubagentId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid subagent ID' });
     }
-    
+
     const chatsDir = await getChatsDir();
     const subagentDir = path.join(chatsDir, getChatRelativePath(fullSubagentId));
     try {
@@ -138,7 +135,7 @@ export const subagentStop = apiProcedure
     if (!isSubagentChatId(fullSubagentId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid subagent ID' });
     }
-    
+
     const chatsDir = await getChatsDir();
     const subagentDir = path.join(chatsDir, getChatRelativePath(fullSubagentId));
     try {
@@ -161,7 +158,7 @@ export const subagentDelete = apiProcedure
     if (!isSubagentChatId(fullSubagentId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid subagent ID' });
     }
-    
+
     const chatsDir = await getChatsDir();
     const subagentDir = path.join(chatsDir, getChatRelativePath(fullSubagentId));
     try {

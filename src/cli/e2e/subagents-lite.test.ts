@@ -89,11 +89,9 @@ describe('E2E Subagents Lite Tests', () => {
     console.log('ENV URL:', envUrl);
 
     // 1. Test subagents add
-    const addProcess = spawn(
-      'node',
-      [litePath, 'subagents', 'add', 'hello subagent'],
-      { env: { ...process.env, CLAW_API_URL: envUrl, CLAW_API_TOKEN: envToken } }
-    );
+    const addProcess = spawn('node', [litePath, 'subagents', 'add', 'hello subagent'], {
+      env: { ...process.env, CLAW_API_URL: envUrl, CLAW_API_TOKEN: envToken },
+    });
     let addStdout = '';
     let addStderr = '';
     addProcess.stdout.on('data', (d) => (addStdout += d.toString()));
