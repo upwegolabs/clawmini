@@ -208,8 +208,9 @@ import { ping } from './user-router.js';
 import { subagentRouter } from './subagent-router.js';
 
 export const fetchPendingMessages = apiProcedure.mutation(async ({ ctx }) => {
-  const cwd = process.cwd();
-  const queue = getMessageQueue(cwd);
+  const workspaceRoot = getWorkspaceRoot(process.cwd());
+  const agentDir = await resolveAgentDir(ctx.tokenPayload?.agentId, workspaceRoot);
+  const queue = getMessageQueue(agentDir);
   const targetSessionId = ctx.tokenPayload?.sessionId || 'default';
 
   const extracted = queue.extractPending((p) => p.sessionId === targetSessionId);

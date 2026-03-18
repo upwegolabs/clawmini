@@ -221,7 +221,45 @@ export async function executeDirectMessage(
     return;
   }
 
-  const queueDir = cwd;
+  const {
+    agentId,
+    agentSessionSettings,
+    isNewSession,
+    targetSessionId: finalSessionId,
+  } = await resolveSessionState(chatId, cwd, state.sessionId, state.agentId);
+
+  let mergedAgent: Agent = settings?.defaultAgent || {};
+  if (agentId !== 'default') {
+    try {
+      const customAgent = await getAgent(agentId, cwd);
+      if (customAgent) {
+        mergedAgent = {
+          ...mergedAgent,
+          ...customAgent,
+          commands: { ...mergedAgent.commands, ...customAgent.commands },
+          env: { ...mergedAgent.env, ...customAgent.env },
+        };
+      }
+    } catch {
+      // Fall back to default if agent not found
+    }
+  }
+
+  const fallbacks = mergedAgent.fallbacks || [];
+  const executionConfigs: { fallback?: Fallback; retries: number; delayMs: number }[] = [
+    { retries: 0, delayMs: 1000 },
+    ...fallbacks.map((f) => ({ fallback: f, retries: f.retries, delayMs: f.delayMs })),
+  ];
+
+  const workspaceRoot = getWorkspaceRoot(cwd);
+  let executionCwd = cwd;
+  if (mergedAgent.directory) {
+    executionCwd = path.resolve(workspaceRoot, mergedAgent.directory);
+  } else if (agentId !== 'default') {
+    executionCwd = path.resolve(workspaceRoot, agentId);
+  }
+
+  const queueDir = executionCwd;
   const queue = getMessageQueue(queueDir);
 
   if (state.action === 'stop') {
@@ -256,44 +294,6 @@ export async function executeDirectMessage(
 
   const taskPromise = queue.enqueue(
     async (signal) => {
-      const {
-        agentId,
-        agentSessionSettings,
-        isNewSession,
-        targetSessionId: finalSessionId,
-      } = await resolveSessionState(chatId, cwd, state.sessionId, state.agentId);
-
-      let mergedAgent: Agent = settings?.defaultAgent || {};
-      if (agentId !== 'default') {
-        try {
-          const customAgent = await getAgent(agentId, cwd);
-          if (customAgent) {
-            mergedAgent = {
-              ...mergedAgent,
-              ...customAgent,
-              commands: { ...mergedAgent.commands, ...customAgent.commands },
-              env: { ...mergedAgent.env, ...customAgent.env },
-            };
-          }
-        } catch {
-          // Fall back to default if agent not found
-        }
-      }
-
-      const fallbacks = mergedAgent.fallbacks || [];
-      const executionConfigs: { fallback?: Fallback; retries: number; delayMs: number }[] = [
-        { retries: 0, delayMs: 1000 },
-        ...fallbacks.map((f) => ({ fallback: f, retries: f.retries, delayMs: f.delayMs })),
-      ];
-
-      const workspaceRoot = getWorkspaceRoot(cwd);
-      let executionCwd = cwd;
-      if (mergedAgent.directory) {
-        executionCwd = path.resolve(workspaceRoot, mergedAgent.directory);
-      } else if (agentId !== 'default') {
-        executionCwd = path.resolve(workspaceRoot, agentId);
-      }
-
       let lastLogMsg: CommandLogMessage | undefined;
       let success = false;
 
