@@ -5,7 +5,6 @@ import fs from 'node:fs/promises';
 import { TRPCError } from '@trpc/server';
 import { apiProcedure, router } from './trpc.js';
 import {
-  getDefaultChatId,
   getChatsDir,
   getChatRelativePath,
   deleteChat,
@@ -21,44 +20,42 @@ export const subagentAdd = apiProcedure
   .input(
     z.object({
       message: z.string(),
-      parentChatId: z.string().optional(),
-      agentId: z.string().optional(),
     })
   )
-  .mutation(async ({ input }) => {
-    const parentChatId = input.parentChatId ?? (await getDefaultChatId());
+  .mutation(async ({ input, ctx }) => {
+    if (!ctx.tokenPayload) throw new TRPCError({ code: 'UNAUTHORIZED' });
+    const parentChatId = ctx.tokenPayload.chatId;
     const subagentUuid = randomUUID();
     const subagentChatId = `${parentChatId}:subagents:${subagentUuid}`;
 
     const settings = ((await readSettings()) as Record<string, unknown> | null) ?? {};
 
-    // Asynchronously start execution using handleUserMessage with noWait=true
     await handleUserMessage(
       subagentChatId,
       input.message,
       settings,
-      undefined, // adapter
-      true, // noWait = true so it starts asynchronously
+      undefined,
+      true, // noWait
       (args) => runCommand({ ...args, logToTerminal: true }),
-      undefined, // sessionId
-      input.agentId
+      undefined,
+      ctx.tokenPayload.agentId
     );
 
-    return { subagentId: subagentChatId };
+    return { subagentId: subagentUuid };
   });
 
 export const subagentList = apiProcedure
-  .input(z.object({ parentChatId: z.string().optional() }))
-  .query(async ({ input }) => {
-    const parentChatId = input.parentChatId ?? (await getDefaultChatId());
+  .query(async ({ ctx }) => {
+    if (!ctx.tokenPayload) throw new TRPCError({ code: 'UNAUTHORIZED' });
+    const parentChatId = ctx.tokenPayload.chatId;
     const chatsDir = await getChatsDir();
-    const subagentsDir = path.join(chatsDir, parentChatId, 'subagents');
+    const subagentsDir = path.join(chatsDir, getChatRelativePath(parentChatId), 'subagents');
 
     try {
       const entries = await fs.readdir(subagentsDir, { withFileTypes: true });
       return entries
         .filter((e) => e.isDirectory())
-        .map((e) => ({ id: `${parentChatId}:subagents:${e.name}` }));
+        .map((e) => ({ id: e.name }));
     } catch {
       return [];
     }
@@ -66,12 +63,25 @@ export const subagentList = apiProcedure
 
 export const subagentTail = apiProcedure
   .input(z.object({ subagentId: z.string(), limit: z.number().optional().default(10) }))
-  .query(async ({ input }) => {
-    if (!isSubagentChatId(input.subagentId)) {
+  .query(async ({ input, ctx }) => {
+    if (!ctx.tokenPayload) throw new TRPCError({ code: 'UNAUTHORIZED' });
+    const parentChatId = ctx.tokenPayload.chatId;
+    const fullSubagentId = `${parentChatId}:subagents:${input.subagentId}`;
+
+    if (!isSubagentChatId(fullSubagentId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid subagent ID' });
     }
+    
+    const chatsDir = await getChatsDir();
+    const subagentDir = path.join(chatsDir, getChatRelativePath(fullSubagentId));
     try {
-      const messages = await getMessages(input.subagentId, input.limit);
+      await fs.stat(subagentDir);
+    } catch {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Subagent not found' });
+    }
+
+    try {
+      const messages = await getMessages(fullSubagentId, input.limit);
       return messages;
     } catch {
       return [];
@@ -85,15 +95,27 @@ export const subagentSend = apiProcedure
       message: z.string(),
     })
   )
-  .mutation(async ({ input }) => {
-    if (!isSubagentChatId(input.subagentId)) {
+  .mutation(async ({ input, ctx }) => {
+    if (!ctx.tokenPayload) throw new TRPCError({ code: 'UNAUTHORIZED' });
+    const parentChatId = ctx.tokenPayload.chatId;
+    const fullSubagentId = `${parentChatId}:subagents:${input.subagentId}`;
+
+    if (!isSubagentChatId(fullSubagentId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid subagent ID' });
+    }
+    
+    const chatsDir = await getChatsDir();
+    const subagentDir = path.join(chatsDir, getChatRelativePath(fullSubagentId));
+    try {
+      await fs.stat(subagentDir);
+    } catch {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Subagent not found' });
     }
 
     const settings = ((await readSettings()) as Record<string, unknown> | null) ?? {};
 
     await handleUserMessage(
-      input.subagentId,
+      fullSubagentId,
       input.message,
       settings,
       undefined,
@@ -108,26 +130,48 @@ export const subagentSend = apiProcedure
 
 export const subagentStop = apiProcedure
   .input(z.object({ subagentId: z.string() }))
-  .mutation(async ({ input }) => {
-    if (!isSubagentChatId(input.subagentId)) {
+  .mutation(async ({ input, ctx }) => {
+    if (!ctx.tokenPayload) throw new TRPCError({ code: 'UNAUTHORIZED' });
+    const parentChatId = ctx.tokenPayload.chatId;
+    const fullSubagentId = `${parentChatId}:subagents:${input.subagentId}`;
+
+    if (!isSubagentChatId(fullSubagentId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid subagent ID' });
     }
+    
     const chatsDir = await getChatsDir();
-    const subagentDir = path.join(chatsDir, getChatRelativePath(input.subagentId));
+    const subagentDir = path.join(chatsDir, getChatRelativePath(fullSubagentId));
+    try {
+      await fs.stat(subagentDir);
+    } catch {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Subagent not found' });
+    }
+
     abortQueuesForDirPrefix(subagentDir);
     return { success: true };
   });
 
 export const subagentDelete = apiProcedure
   .input(z.object({ subagentId: z.string() }))
-  .mutation(async ({ input }) => {
-    if (!isSubagentChatId(input.subagentId)) {
+  .mutation(async ({ input, ctx }) => {
+    if (!ctx.tokenPayload) throw new TRPCError({ code: 'UNAUTHORIZED' });
+    const parentChatId = ctx.tokenPayload.chatId;
+    const fullSubagentId = `${parentChatId}:subagents:${input.subagentId}`;
+
+    if (!isSubagentChatId(fullSubagentId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid subagent ID' });
     }
+    
     const chatsDir = await getChatsDir();
-    const subagentDir = path.join(chatsDir, getChatRelativePath(input.subagentId));
+    const subagentDir = path.join(chatsDir, getChatRelativePath(fullSubagentId));
+    try {
+      await fs.stat(subagentDir);
+    } catch {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Subagent not found' });
+    }
+
     abortQueuesForDirPrefix(subagentDir);
-    await deleteChat(input.subagentId);
+    await deleteChat(fullSubagentId);
     return { success: true };
   });
 

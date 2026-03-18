@@ -223,11 +223,7 @@ export async function executeDirectMessage(
     return;
   }
 
-  let queueDir = cwd;
-  if (isSubagentChatId(chatId)) {
-    const chatsDir = await getChatsDir(cwd);
-    queueDir = path.join(chatsDir, getChatRelativePath(chatId));
-  }
+  const queueDir = cwd;
   const queue = getMessageQueue(queueDir);
 
   if (state.action === 'stop') {

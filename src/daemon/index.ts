@@ -175,19 +175,6 @@ export async function initDaemon() {
       const address = apiServer?.address() as net.AddressInfo;
       const actualPort = address.port;
       console.log(`Daemon HTTP API initialized and listening on http://${host}:${actualPort}`);
-
-      if (port === 0) {
-        try {
-          const settingsStr = fs.readFileSync(settingsPath, 'utf8');
-          const settingsObj = JSON.parse(settingsStr);
-          if (settingsObj.api) {
-            settingsObj.api.port = actualPort;
-            fs.writeFileSync(settingsPath, JSON.stringify(settingsObj, null, 2));
-          }
-        } catch (err) {
-          console.error('Failed to update settings.json with actual port:', err);
-        }
-      }
     });
   }
 

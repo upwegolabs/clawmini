@@ -25,7 +25,7 @@ describe('E2E Subagents Lite Tests', () => {
       settingsPath,
       JSON.stringify({
         ...JSON.parse(originalSettings),
-        api: { host: '127.0.0.1', port: 0 },
+        api: { host: '127.0.0.1', port: 59345 },
       })
     );
     const upRes = await runCli(['up']);
@@ -91,7 +91,7 @@ describe('E2E Subagents Lite Tests', () => {
     // 1. Test subagents add
     const addProcess = spawn(
       'node',
-      [litePath, 'subagents', 'add', 'hello subagent', '-c', 'lite-chat'],
+      [litePath, 'subagents', 'add', 'hello subagent'],
       { env: { ...process.env, CLAW_API_URL: envUrl, CLAW_API_TOKEN: envToken } }
     );
     let addStdout = '';
@@ -107,15 +107,15 @@ describe('E2E Subagents Lite Tests', () => {
         fs.readFileSync(path.resolve(e2eDir, '.clawmini/daemon.log'), 'utf8')
       );
     }
-    expect(addStdout).toContain('Subagent created with ID: lite-chat:subagents:');
+    expect(addStdout).toContain('Subagent created with ID: ');
 
     // Extract subagent ID
-    const match = addStdout.match(/lite-chat:subagents:[a-f0-9-]+/);
+    const match = addStdout.match(/ID: ([a-f0-9-]+)/);
     expect(match).toBeTruthy();
-    const subagentId = match![0];
+    const subagentId = match![1]!;
 
     // 2. Test subagents list
-    const listProcess = spawn('node', [litePath, 'subagents', 'list', '-c', 'lite-chat'], {
+    const listProcess = spawn('node', [litePath, 'subagents', 'list'], {
       env: { ...process.env, CLAW_API_URL: envUrl, CLAW_API_TOKEN: envToken },
     });
     let listStdout = '';

@@ -278,15 +278,11 @@ const subagents = program.command('subagents').description('Manage subagents');
 subagents
   .command('add <message>')
   .description('Add a subagent')
-  .option('-a, --agent <name>', 'Agent name')
-  .option('-c, --chat <chatId>', 'Parent chat ID')
-  .action(async (message, options) => {
+  .action(async (message) => {
     try {
       const client = getClient();
       const result = await client.subagents.add.mutate({
         message,
-        agentId: options.agent,
-        parentChatId: options.chat,
       });
       console.log(`Subagent created with ID: ${result.subagentId}`);
     } catch (err) {
@@ -298,11 +294,10 @@ subagents
 subagents
   .command('list')
   .description('List subagents')
-  .option('-c, --chat <chatId>', 'Parent chat ID')
-  .action(async (options) => {
+  .action(async () => {
     try {
       const client = getClient();
-      const list = await client.subagents.list.query({ parentChatId: options.chat });
+      const list = await client.subagents.list.query();
       console.log(JSON.stringify(list, null, 2));
     } catch (err) {
       console.error('Error:', err instanceof Error ? err.message : err);
@@ -327,7 +322,7 @@ subagents
 
 subagents
   .command('send <id> <message>')
-  .description('Send a message to a subagent')
+  .description('Send a follow-up message to a subagent')
   .action(async (id, message) => {
     try {
       const client = getClient();

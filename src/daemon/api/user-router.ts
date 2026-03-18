@@ -223,7 +223,7 @@ export const deleteChat = apiProcedure
     return { success: true };
   });
 
-import { subagentRouter } from './subagent-router.js';
+import { userSubagentRouter } from './user-subagent-router.js';
 
 export const userRouter = router({
   sendMessage,
@@ -236,7 +236,7 @@ export const userRouter = router({
   addCronJob: userAddCronJob,
   deleteCronJob: userDeleteCronJob,
   deleteChat,
-  subagents: subagentRouter,
+  subagents: userSubagentRouter,
 });
 
 export type UserRouter = typeof userRouter;

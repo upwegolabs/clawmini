@@ -13,9 +13,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       ...actual,
       readFile: vi.fn(),
       readdir: vi.fn(),
+      stat: vi.fn(),
     },
     readFile: vi.fn(),
     readdir: vi.fn(),
+    stat: vi.fn(),
   };
 });
 
@@ -49,21 +51,32 @@ vi.mock('../chats.js', async (importOriginal) => {
 });
 
 describe('Subagent Router', () => {
+  const mockCtx = {
+    tokenPayload: {
+      chatId: 'parent-chat',
+      agentId: 'my-agent',
+      sessionId: 'session-id',
+      version: '1',
+      iat: 0,
+      exp: 0,
+    },
+    isApiServer: true,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   describe('subagentAdd', () => {
     it('should create a subagent and trigger execution asynchronously', async () => {
-      vi.mocked(chats.getDefaultChatId).mockResolvedValue('default-chat');
       vi.mocked(fs.readFile).mockResolvedValue('{}');
 
-      const caller = subagentRouter.createCaller({});
-      const result = await caller.add({ message: 'do something', agentId: 'my-agent' });
+      const caller = subagentRouter.createCaller(mockCtx as any);
+      const result = await caller.add({ message: 'do something' });
 
-      expect(result.subagentId).toMatch(/^default-chat:subagents:[a-f0-9-]+$/);
+      expect(result.subagentId).toMatch(/^[a-f0-9-]+$/);
       expect(message.handleUserMessage).toHaveBeenCalledWith(
-        result.subagentId,
+        `parent-chat:subagents:${result.subagentId}`,
         'do something',
         expect.any(Object),
         undefined,
@@ -73,57 +86,62 @@ describe('Subagent Router', () => {
         'my-agent'
       );
     });
+
+    it('should fail if unauthenticated', async () => {
+      const caller = subagentRouter.createCaller({} as any);
+      await expect(caller.add({ message: 'do something' })).rejects.toThrow('UNAUTHORIZED');
+    });
   });
 
   describe('subagentList', () => {
-    it('should list active subagents for a parent chat', async () => {
-      vi.mocked(chats.getDefaultChatId).mockResolvedValue('parent');
+    it('should list active subagents for the authenticated parent chat', async () => {
       vi.mocked(fs.readdir).mockResolvedValue([
         { name: 'uuid-1', isDirectory: () => true },
         { name: 'uuid-2', isDirectory: () => true },
         { name: 'file.txt', isDirectory: () => false },
       ] as unknown as Awaited<ReturnType<typeof fs.readdir>>);
 
-      const caller = subagentRouter.createCaller({});
-      const result = await caller.list({});
+      const caller = subagentRouter.createCaller(mockCtx as any);
+      const result = await caller.list();
 
       expect(result).toEqual([
-        { id: 'parent:subagents:uuid-1' },
-        { id: 'parent:subagents:uuid-2' },
+        { id: 'uuid-1' },
+        { id: 'uuid-2' },
       ]);
     });
   });
 
   describe('subagentTail', () => {
     it('should tail messages from a subagent chat', async () => {
+      vi.mocked(fs.stat).mockResolvedValue({} as any);
       vi.mocked(chats.getMessages).mockResolvedValue([
         { id: '1', role: 'user', content: 'hello', timestamp: '1' },
       ]);
 
-      const caller = subagentRouter.createCaller({});
-      const result = await caller.tail({ subagentId: 'parent:subagents:uuid1', limit: 5 });
+      const caller = subagentRouter.createCaller(mockCtx as any);
+      const result = await caller.tail({ subagentId: 'uuid1', limit: 5 });
 
-      expect(chats.getMessages).toHaveBeenCalledWith('parent:subagents:uuid1', 5);
+      expect(chats.getMessages).toHaveBeenCalledWith('parent-chat:subagents:uuid1', 5);
       expect(result).toHaveLength(1);
     });
 
-    it('should throw if subagent ID is invalid', async () => {
+    it('should throw if subagent ID format is invalid after composition', async () => {
       vi.mocked(chats.isSubagentChatId).mockReturnValue(false);
-      const caller = subagentRouter.createCaller({});
-      await expect(caller.tail({ subagentId: 'invalid-id' })).rejects.toThrow(
-        'Invalid subagent ID'
-      );
+      const caller = subagentRouter.createCaller(mockCtx as any);
+      await expect(caller.tail({ subagentId: 'invalid-id' })).rejects.toThrow('Invalid subagent ID');
     });
   });
 
   describe('subagentSend', () => {
     it('should send a message to a subagent and trigger execution', async () => {
       vi.mocked(chats.isSubagentChatId).mockReturnValue(true);
-      const caller = subagentRouter.createCaller({});
-      await caller.send({ subagentId: 'parent:subagents:uuid1', message: 'next step' });
+      vi.mocked(fs.stat).mockResolvedValue({} as any);
+      
+      const caller = subagentRouter.createCaller(mockCtx as any);
+      await caller.send({ subagentId: 'uuid1', message: 'next step' });
 
       expect(message.handleUserMessage).toHaveBeenCalledWith(
-        'parent:subagents:uuid1',
+        'parent-chat:subagents:uuid1',
         'next step',
         expect.any(Object),
         undefined,
@@ -138,8 +156,9 @@ describe('Subagent Router', () => {
   describe('subagentStop', () => {
     it('should abort queue for a subagent', async () => {
       vi.mocked(chats.isSubagentChatId).mockReturnValue(true);
-      const caller = subagentRouter.createCaller({});
-      await caller.stop({ subagentId: 'parent:subagents:uuid1' });
+      vi.mocked(fs.stat).mockResolvedValue({} as any);
+      const caller = subagentRouter.createCaller(mockCtx as any);
+      await caller.stop({ subagentId: 'uuid1' });
 
       expect(queue.abortQueuesForDirPrefix).toHaveBeenCalled();
     });
@@ -148,11 +167,12 @@ describe('Subagent Router', () => {
   describe('subagentDelete', () => {
     it('should abort queue and delete subagent chat', async () => {
       vi.mocked(chats.isSubagentChatId).mockReturnValue(true);
-      const caller = subagentRouter.createCaller({});
-      await caller.delete({ subagentId: 'parent:subagents:uuid1' });
+      vi.mocked(fs.stat).mockResolvedValue({} as any);
+      const caller = subagentRouter.createCaller(mockCtx as any);
+      await caller.delete({ subagentId: 'uuid1' });
 
       expect(queue.abortQueuesForDirPrefix).toHaveBeenCalled();
-      expect(chats.deleteChat).toHaveBeenCalledWith('parent:subagents:uuid1');
+      expect(chats.deleteChat).toHaveBeenCalledWith('parent-chat:subagents:uuid1');
     });
   });
 });
