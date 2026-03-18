@@ -103,6 +103,13 @@ export function getMessageQueue(dir: string): Queue<MessageQueuePayload> {
   return messageQueues.get(dir)!;
 }
 
+export function abortQueuesForSessionId(sessionId: string): void {
+  for (const queue of messageQueues.values()) {
+    queue.extractPending((p) => p.sessionId === sessionId);
+    queue.abortCurrent((p) => p.sessionId === sessionId);
+  }
+}
+
 export function abortQueuesForDirPrefix(parentDir: string): void {
   for (const [dir, queue] of messageQueues.entries()) {
     if (pathIsInsideDir(dir, parentDir, { allowSameDir: true })) {

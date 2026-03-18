@@ -11,9 +11,9 @@ import {
   getMessages,
   isSubagentChatId,
 } from '../chats.js';
-import { abortQueuesForDirPrefix } from '../queue.js';
+import { abortQueuesForDirPrefix, abortQueuesForSessionId } from '../queue.js';
 import { handleUserMessage } from '../message.js';
-import { readSettings, writeChatSettings } from '../../shared/workspace.js';
+import { readSettings, writeChatSettings, readChatSettings } from '../../shared/workspace.js';
 import { runCommand } from '../utils/spawn.js';
 
 export const subagentAdd = apiProcedure
@@ -155,6 +155,14 @@ export const subagentStop = apiProcedure
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Subagent not found' });
     }
 
+    const chatSettings = await readChatSettings(fullSubagentId);
+    if (chatSettings?.defaultAgent && chatSettings.sessions?.[chatSettings.defaultAgent]) {
+      const sessionId = chatSettings.sessions[chatSettings.defaultAgent];
+      if (sessionId) {
+        abortQueuesForSessionId(sessionId);
+      }
+    }
+
     abortQueuesForDirPrefix(subagentDir);
     return { success: true };
   });
@@ -176,6 +184,14 @@ export const subagentDelete = apiProcedure
       await fs.stat(subagentDir);
     } catch {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Subagent not found' });
+    }
+
+    const chatSettings = await readChatSettings(fullSubagentId);
+    if (chatSettings?.defaultAgent && chatSettings.sessions?.[chatSettings.defaultAgent]) {
+      const sessionId = chatSettings.sessions[chatSettings.defaultAgent];
+      if (sessionId) {
+        abortQueuesForSessionId(sessionId);
+      }
     }
 
     abortQueuesForDirPrefix(subagentDir);
