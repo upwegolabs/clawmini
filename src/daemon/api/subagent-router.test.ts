@@ -48,6 +48,7 @@ vi.mock('../chats.js', async (importOriginal) => {
     deleteChat: vi.fn(),
     getMessages: vi.fn(),
     isSubagentChatId: vi.fn().mockImplementation((id) => id.includes(':subagents:')),
+    getSubagentDepth: vi.fn().mockReturnValue(0),
   };
 });
 

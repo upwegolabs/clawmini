@@ -50,6 +50,12 @@ export function parseSubagentChatId(chatId: string): { parentId: string; uuid: s
   return { parentId: chatId.slice(0, lastIndex), uuid: chatId.slice(lastIndex + 11) };
 }
 
+export function getSubagentDepth(chatId: string): number {
+  if (!isSubagentChatId(chatId)) return 0;
+  const matches = chatId.match(/:subagents:/g);
+  return matches ? matches.length : 0;
+}
+
 export function isValidChatId(chatId: string): boolean {
   if (!chatId || chatId.length === 0) return false;
   // Standard chat ID

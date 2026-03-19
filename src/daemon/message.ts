@@ -6,6 +6,7 @@ import {
   type CommandLogMessage,
   isSubagentChatId,
   parseSubagentChatId,
+  getSubagentDepth,
 } from './chats.js';
 import { getMessageQueue } from './queue.js';
 import { executeRouterPipeline } from './routers.js';
@@ -90,6 +91,7 @@ async function resolveSessionState(
 }
 
 function prepareCommandAndEnv(
+  chatId: string,
   agent: Agent,
   message: string,
   isNewSession: boolean,
@@ -113,6 +115,12 @@ function prepareCommandAndEnv(
     ...process.env,
     CLAW_CLI_MESSAGE: message,
   } as Record<string, string>;
+
+  if (isSubagentChatId(chatId)) {
+    const depth = getSubagentDepth(chatId);
+    env['CLAW_IS_SUBAGENT'] = 'true';
+    env['CLAW_SUBAGENT_DEPTH'] = depth.toString();
+  }
 
   applyEnvOverrides(env, currentAgent.env);
 
@@ -323,6 +331,7 @@ export async function executeDirectMessage(
             currentAgent,
             command: initialCommand,
           } = prepareCommandAndEnv(
+            chatId,
             mergedAgent,
             state.message,
             isNewSession,

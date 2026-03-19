@@ -10,6 +10,7 @@ import {
   deleteChat,
   getMessages,
   isSubagentChatId,
+  getSubagentDepth,
 } from '../chats.js';
 import { abortQueuesForDirPrefix, abortQueuesForSessionId, isSessionIdActive } from '../queue.js';
 import { handleUserMessage } from '../message.js';
@@ -26,6 +27,14 @@ export const subagentAdd = apiProcedure
   .mutation(async ({ input, ctx }) => {
     if (!ctx.tokenPayload) throw new TRPCError({ code: 'UNAUTHORIZED' });
     const parentChatId = ctx.tokenPayload.chatId;
+
+    if (getSubagentDepth(parentChatId) >= 2) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Maximum subagent depth of 2 reached. You must perform this work directly.',
+      });
+    }
+
     const subagentUuid = randomUUID();
     const subagentChatId = `${parentChatId}:subagents:${subagentUuid}`;
 

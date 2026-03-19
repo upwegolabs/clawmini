@@ -9,11 +9,14 @@ You are running within a "clawmini" environment, and can use the `clawmini-lite`
 
 This enables you to act as an orchestrator, keeping your primary chat responsive and preserving your main context window while background tasks execute. Once a subagent finishes, it will automatically append a log message back to your main chat.
 
+**Important Rule:** Do NOT perform long-running or blocking work directly in your main thread if you can avoid it. Always delegate intensive tasks to a subagent to keep the main chat responsive. 
+*(Exception: If you are currently running as a subagent—indicated by the `CLAW_IS_SUBAGENT` environment variable—you ARE the background worker. It is expected and safe for you to perform long-running, blocking work directly.)*
+
 ## Usage
 
 ### Adding a Subagent
 
-Spawn a new subagent to handle a specific task. Returns the UUID of the newly created subagent.
+Spawn a new subagent to handle a specific task. Returns the UUID of the newly created subagent. Note: Subagents can only be spawned up to a maximum depth of 2.
 
 ```bash
 clawmini-lite subagents add "message/task description"

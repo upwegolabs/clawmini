@@ -19,6 +19,7 @@ export {
   isValidChatId,
   isSubagentChatId,
   parseSubagentChatId,
+  getSubagentDepth,
   createChat,
   listChats,
   deleteChat,
