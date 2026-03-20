@@ -8,3 +8,12 @@
    - **Answer:** `subagents list` should return the subagent ID, agent name, status (running/completed), creation time, and a snippet of the original message sent to it.
 4. **Parent Chat Deletion:** If the parent chat (`foo`) is deleted, should all of its running subagents be automatically stopped and deleted as well?
    - **Answer:** Yes, if the parent chat is deleted, all associated subagents should be automatically stopped and their directories deleted.
+
+5. **Naming `fetch-ongoing`:** Would `clawmini-lite pending-tasks` be an appropriate name for the command that returns unawaited policy requests and subagents?
+   - **Answer:** We will use `clawmini-lite tasks pending`. Subagents and policies will both be referred to generally as "tasks" from the subagent's perspective.
+
+6. **Waiting for Policies:** You mentioned `clawmini-lite.js subagents wait 123`. Should policy requests be awaited using a separate `request wait <id>` command, or should there be a unified top-level `wait <id>` command for both subagents and policy requests?
+   - **Answer:** We will use a unified `clawmini-lite tasks wait <id>` command that works for both subagents and policy requests. We must ensure IDs are unique between them (e.g. using UUIDs).
+
+7. **Persistence of Ongoing Tasks:** Should the list of a subagent's unawaited tasks (subagents and policy requests) be persisted to disk (e.g., in the subagent's `settings.json`) so they survive a daemon restart?
+   - **Answer:** No, if a restart occurs, we will just kill the subagents and notify the main agent of the failure due to restart. The main agent can then decide whether to respawn the subagent.

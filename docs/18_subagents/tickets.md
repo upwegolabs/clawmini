@@ -68,3 +68,27 @@
 
 **Verification Steps:**
 - Run `npm run validate` to ensure tests and type checking pass after refactoring.
+
+## Milestone 6: Agent vs Subagent Execution Roles
+**Status:** Not started
+
+**Tasks:**
+- Add checks in the TRPC routers for `jobs` and `log` endpoints using `isSubagentChatId`. If the caller is a subagent, reject the request with a clear error indicating subagents cannot schedule jobs or send direct logs.
+- Update `subagentAdd` and `createPolicyRequest` (the underlying procedure for `request`) behavior based on the caller context:
+  - If called by a main agent: return immediately with the ID (async execution). The `--async` flag does nothing.
+  - If called by a subagent: block the response until the job completes, UNLESS `--async` is passed, in which case return the ID immediately.
+  - *Ensure that returned IDs are uniquely identifiable (e.g., UUIDs) so they can be awaited universally.*
+- Add a new `tasks` command to the `clawmini-lite` CLI.
+- Implement `tasks pending` subcommand to fetch a list of unawaited policy requests or subagents for the active subagent session.
+- Implement `tasks wait <id>` subcommand to allow a subagent to block and wait on a previously created asynchronous subagent or policy request.
+- Add aliases `subagents wait <id>` and `request wait <id>` that route to `tasks wait <id>`.
+- Add context check in the `wait` procedure: if the caller is a main agent, reject the request with a clear error indicating main agents cannot block via wait commands.
+- Implement `AfterAgent` (or equivalent) hook verification logic in the execution flow. When a subagent stops executing, verify if there are any unawaited operations via `tasks pending` equivalents; if so, inject `{decision: "deny", reason: "must await ongoing..."}` to force the subagent to continue.
+- Ensure subagent process cleanup correctly notifies the main agent of failure upon daemon restart.
+
+**Verification Steps:**
+- Add unit tests ensuring `jobs` and `log` TRPC calls fail when invoked from a subagent ID context.
+- Add unit/E2E tests checking the synchronous vs asynchronous blocking behaviors for `request` and `subagents add` commands, parameterized by caller type (Agent vs Subagent).
+- Add unit/E2E tests for `clawmini-lite tasks wait` and `tasks pending`.
+- Add test asserting the hook verification successfully rejects subagent termination if unawaited tasks exist.
+- Run `npm run validate` to ensure all checks pass.

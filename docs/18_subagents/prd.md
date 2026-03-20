@@ -13,39 +13,43 @@ Currently, agents operate sequentially in a single chat. If an agent starts a lo
 
 ## 4. Requirements
 
-### 4.1 CLI Commands (`clawmini-lite subagents`)
-The new feature introduces a `subagents` command to `clawmini-lite` with the following subcommands:
-- `add <message> [--agent <name>]`: Spawns a new subagent to handle the specified `message`. Defaults to the current agent if `--agent` is not provided. Returns the UUID of the newly created subagent.
-- `list`: Shows all running and completed subagents for the current chat. Output should include the subagent ID, agent name, status (running/completed), creation time, and a snippet of the original message.
-- `tail <id>`: Displays recent messages and logs for the specified subagent's chat.
-- `send <id> <message>`: Appends a new message/directive to the running subagent.
-- `stop <id>`: Interrupts and stops anything the subagent is currently executing (aborting its process queue).
-- `delete <id>`: Stops the subagent (if running) and deletes its associated chat and files.
+### 4.1 Agent vs Subagent Capabilities
+- **Jobs:** An agent can schedule tasks for itself using `clawmini-lite.js jobs`. A sub-agent cannot schedule jobs and should receive an error.
+- **Logging:** An agent can send messages to the user via `clawmini-lite.js log`. A sub-agent cannot send messages to the user directly and should receive an error.
+- **Asynchronous Execution:**
+  - **Main Agent:** Never blocks on requests. Commands like `clawmini-lite.js subagents add` and `clawmini-lite.js request` always return immediately with an ID for the operation and completion notifications. The `--async` flag has no effect since these commands are always asynchronous for the main agent. Any `wait` command (`tasks wait`, `subagents wait`, `request wait`) should return an error if called by a main agent, as they must never block.
+  - **Sub-Agent:** Defaults to blocking when calling these commands. A sub-agent may specify `--async` for these commands to receive an ID for the operation and run it asynchronously, but it must eventually block on these operations via a wait command (e.g., `clawmini-lite.js tasks wait <id>`).
 
-### 4.2 Architecture and Execution Bypassing Routers
+### 4.2 CLI Commands (`clawmini-lite`)
+- **`subagents`** subcommands:
+  - `add <message> [--agent <name>] [--async]`: Spawns a new subagent to handle the specified `message`. Defaults to the current agent if `--agent` is not provided. Sync/async execution depends on the caller.
+  - `list`: Shows all running and completed subagents for the current chat. Output should include the subagent ID, agent name, status (running/completed), creation time, and a snippet of the original message.
+  - `tail <id>`: Displays recent messages and logs for the specified subagent's chat.
+  - `send <id> <message>`: Appends a new message/directive to the running subagent.
+  - `stop <id>`: Interrupts and stops anything the subagent is currently executing (aborting its process queue).
+  - `delete <id>`: Stops the subagent (if running) and deletes its associated chat and files.
+  - `wait <id>`: Alias for `tasks wait <id>`. Blocks the current sub-agent until the specified asynchronous subagent task completes.
+- **`request`** subcommand additions:
+  - `wait <id>`: Alias for `tasks wait <id>`. Blocks the current sub-agent until the specified asynchronous policy request task completes.
+- **`tasks`** subcommands (used by subagents):
+  - `pending`: Returns any tasks (policy requests or subagents) that have not yet been awaited by the subagent.
+  - `wait <id>`: Blocks the current sub-agent until the specified asynchronous task (subagent or policy request) completes.
+
+### 4.3 Architecture and Execution Bypassing Routers
 - Messages sent to subagents should **not** go through the standard router pipeline (`executeRouterPipeline`). They should directly invoke `executeDirectMessage` to prevent router side-effects meant for main user interactions.
 - Each subagent will have its own message queue (or execution context) independent of the main chat, allowing for true concurrent execution.
 
-### 4.3 Chat Storage and ID Format
+### 4.4 Chat Storage and ID Format
 - **ID Format:** Subagent IDs within the system will be formatted as `{parentChatId}:subagents:{subagentUuid}`.
 - **File System Structure:** The chat data will be stored physically at `chats/{parentChatId}/subagents/{subagentUuid}/chat.jsonl`.
 - `isValidChatId` logic or related chat resolution logic must be updated to handle this namespaced ID scheme correctly.
 
-### 4.4 Completion Notification
-- When a subagent completes its task queue (i.e., when its execution process successfully finishes or errors out), it must automatically send a notification message back to the **parent chat**.
-- **Message Format Proposal:**
-  ```
-  [Automatic message] Sub-agent {id} ({agent-name}) has completed its task.
+### 4.5 Completion Notification, Await Enforcement & Lifecycle
+- **Completion Notifications:** When a subagent completes its task queue, it must automatically send a notification message back to the **parent chat**.
+- **Hook Enforcement:** A hook will watch if the subagent is attempting to stop working without having awaited some asynchronous operations (e.g. policy requests or subagents). It will force the subagent to continue, reminding it that it must await those tasks. For Gemini CLI, the `AfterAgent` hook allows us to force the agent to continue by responding with the JSON `{decision: "deny", reason: "must await ongoing tasks using 'clawmini-lite tasks pending' and 'tasks wait'..."}`.
+- **Daemon Restarts / Persistence:** Unawaited tasks inside a subagent do not need to survive daemon restarts. If the daemon restarts, subagents should be considered killed, and a failure notification should be sent to the main agent's chat, allowing the main agent to decide whether to respawn it.
 
-  ### Original Request
-  {original_message_snippet}
-
-  ### Final Output
-  {final_output_or_summary}
-  ```
-  *(Note: `{final_output_or_summary}` should be the result of the last command, or an error if it failed.)*
-
-### 4.5 Parent Chat Lifecycle Hooks
+### 4.6 Parent Chat Lifecycle Hooks
 - **Cascade Deletion:** If a parent chat is deleted via `clawmini chats delete <id>`, any associated running subagents must be immediately aborted, and their directories (`chats/{id}/subagents/*`) completely removed.
 
 ## 5. Security, Privacy & Accessibility Concerns
