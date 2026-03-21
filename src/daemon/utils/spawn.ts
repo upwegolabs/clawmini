@@ -3,7 +3,7 @@ import type { RunCommandFn } from '../message.js';
 
 export const runCommand: RunCommandFn &
   ((
-    args: Parameters<RunCommandFn>[0] & { logToTerminal?: boolean }
+    args: Parameters<RunCommandFn>[0] & { logToTerminal?: boolean; onStdout?: (chunk: string) => void }
   ) => ReturnType<RunCommandFn>) = async ({
   command,
   cwd,
@@ -11,7 +11,8 @@ export const runCommand: RunCommandFn &
   stdin,
   signal,
   logToTerminal,
-}: Parameters<RunCommandFn>[0] & { logToTerminal?: boolean }) => {
+  onStdout,
+}: Parameters<RunCommandFn>[0] & { logToTerminal?: boolean; onStdout?: (chunk: string) => void }) => {
   return new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve, reject) => {
     const p = spawn(command, { shell: true, cwd, env, signal });
 
@@ -30,9 +31,13 @@ export const runCommand: RunCommandFn &
 
     if (p.stdout) {
       p.stdout.on('data', (data) => {
-        stdout += data.toString();
+        const chunk = data.toString();
+        stdout += chunk;
         if (logToTerminal && !stdin) {
           process.stdout.write(data);
+        }
+        if (onStdout) {
+          onStdout(chunk);
         }
       });
     }

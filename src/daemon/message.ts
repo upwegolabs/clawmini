@@ -58,6 +58,7 @@ export type RunCommandFn = (args: {
   env: Record<string, string>;
   stdin?: string | undefined;
   signal?: AbortSignal | undefined;
+  onStdout?: (chunk: string) => void;
 }) => Promise<RunCommandResult>;
 
 async function resolveSessionState(
@@ -415,8 +416,70 @@ export async function executeDirectMessage(
           const typingInterval = setInterval(() => {
             emitTyping(chatId);
           }, 5000);
+
+          // Incremental streaming: if the agent has getMessageContent,
+          // we assume JSON output and parse stream-json lines as they arrive.
+          let lineBuffer = '';
+          const onStdout = currentAgent.commands?.getMessageContent
+            ? (chunk: string) => {
+                lineBuffer += chunk;
+                const lines = lineBuffer.split('\n');
+                lineBuffer = lines.pop()!; // keep incomplete line
+                for (const line of lines) {
+                  if (!line.trim()) continue;
+                  try {
+                    const event = JSON.parse(line);
+                    // Only emit incremental logs for interesting events
+                    let incrementalContent: string | undefined;
+                    if (event.type === 'assistant') {
+                      const content = event.message?.content;
+                      if (Array.isArray(content)) {
+                        for (const block of content) {
+                          if (block.type === 'text' && block.text) {
+                            incrementalContent = block.text;
+                          } else if (block.type === 'tool_use') {
+                            const name = block.name || 'tool';
+                            if (name === 'Bash') {
+                              incrementalContent = `\`$ ${block.input?.command || ''}\``;
+                            } else if (name === 'Edit' || name === 'Write') {
+                              incrementalContent = `\`[${name}] ${block.input?.file_path || ''}\``;
+                            } else if (name === 'Agent') {
+                              incrementalContent = `\`[Subagent] ${block.input?.description || ''}\``;
+                            }
+                          }
+                        }
+                      }
+                    }
+                    if (incrementalContent) {
+                      const streamMsg: CommandLogMessage = {
+                        id: crypto.randomUUID(),
+                        messageId: userMsg.id,
+                        role: 'log',
+                        content: incrementalContent,
+                        stderr: '',
+                        timestamp: new Date().toISOString(),
+                        command: 'stream',
+                        cwd: executionCwd,
+                        exitCode: 0,
+                        level: 'verbose',
+                      };
+                      appendMessage(chatId, streamMsg).catch(() => {});
+                    }
+                  } catch {
+                    // Not valid JSON, skip
+                  }
+                }
+              }
+            : undefined;
+
           try {
-            mainResult = await runCommand({ command, cwd: executionCwd, env, signal });
+            mainResult = await runCommand({
+              command,
+              cwd: executionCwd,
+              env,
+              signal,
+              ...(onStdout ? { onStdout } : {}),
+            });
           } finally {
             clearInterval(typingInterval);
           }
