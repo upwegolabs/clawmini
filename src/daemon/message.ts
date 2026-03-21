@@ -216,7 +216,7 @@ export async function executeDirectMessage(
     return;
   }
 
-  const queue = getMessageQueue(cwd);
+  const queue = getMessageQueue(`${cwd}:${chatId}`);
 
   if (state.action === 'stop') {
     queue.abortCurrent();
