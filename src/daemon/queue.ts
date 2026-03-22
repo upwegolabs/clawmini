@@ -13,14 +13,15 @@ export class Queue<TPayload = string> {
   private currentController: AbortController | null = null;
   private currentPayload?: TPayload | undefined;
   private taskStartTime: number = 0;
-  private static readonly STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+  private lastActivityTime: number = 0;
+  private static readonly STUCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes with no activity = stuck
 
   enqueue(task: Task, payload?: TPayload): Promise<void> {
-    // Auto-recovery: if the queue has been "running" for too long, it's stuck
-    if (this.isRunning && this.taskStartTime > 0) {
-      const elapsed = Date.now() - this.taskStartTime;
-      if (elapsed > Queue.STUCK_THRESHOLD_MS) {
-        console.error(`[queue] Task running for ${Math.round(elapsed / 1000)}s — force-resetting stuck queue`);
+    // Auto-recovery: if no activity for too long, the queue is stuck
+    if (this.isRunning && this.lastActivityTime > 0) {
+      const sinceActivity = Date.now() - this.lastActivityTime;
+      if (sinceActivity > Queue.STUCK_THRESHOLD_MS) {
+        console.error(`[queue] No activity for ${Math.round(sinceActivity / 1000)}s — force-resetting stuck queue`);
         this.forceReset();
       }
     }
@@ -38,9 +39,19 @@ export class Queue<TPayload = string> {
 
     this.isRunning = true;
     this.taskStartTime = Date.now();
+    this.lastActivityTime = Date.now();
     const entry = this.pending.shift()!;
     this.currentController = new AbortController();
     this.currentPayload = entry.payload;
+
+    // Safety watchdog: if the task doesn't complete within 15 minutes,
+    // force-reset and move on. This catches all stuck scenarios.
+    const watchdog = setTimeout(() => {
+      if (this.isRunning) {
+        console.error('[queue] Watchdog: task exceeded 15 minutes, force-resetting');
+        this.forceReset();
+      }
+    }, 15 * 60 * 1000);
 
     try {
       await entry.task(this.currentController.signal);
@@ -48,6 +59,7 @@ export class Queue<TPayload = string> {
     } catch (error) {
       entry.reject(error);
     } finally {
+      clearTimeout(watchdog);
       this.isRunning = false;
       this.currentController = null;
       this.currentPayload = undefined;
@@ -88,6 +100,16 @@ export class Queue<TPayload = string> {
 
   getCurrentPayload(): TPayload | undefined {
     return this.currentPayload;
+  }
+
+  /**
+   * Report that the current task is still making progress.
+   * Resets the stuck-detection timer.
+   */
+  reportActivity(): void {
+    if (this.isRunning) {
+      this.lastActivityTime = Date.now();
+    }
   }
 
   clear(reason: string = 'Task cleared', predicate?: (payload: TPayload) => boolean): void {

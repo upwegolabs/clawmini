@@ -444,6 +444,7 @@ export async function executeDirectMessage(
           let mainResult;
           const typingInterval = setInterval(() => {
             emitTyping(chatId);
+            queue.reportActivity();
           }, 5000);
 
           // Incremental streaming: if the agent has getMessageContent,
