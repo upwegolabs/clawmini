@@ -58,6 +58,7 @@ export type RunCommandFn = (args: {
   env: Record<string, string>;
   stdin?: string | undefined;
   signal?: AbortSignal | undefined;
+  onStdout?: (chunk: string) => void;
 }) => Promise<RunCommandResult>;
 
 async function resolveSessionState(
@@ -215,7 +216,7 @@ export async function executeDirectMessage(
     return;
   }
 
-  const queue = getMessageQueue(cwd);
+  const queue = getMessageQueue(`${cwd}:${chatId}`);
 
   if (state.action === 'stop') {
     queue.abortCurrent();
@@ -415,8 +416,103 @@ export async function executeDirectMessage(
           const typingInterval = setInterval(() => {
             emitTyping(chatId);
           }, 5000);
+
+          // Incremental streaming: if the agent has getMessageContent,
+          // Incremental streaming: parse stream-json lines as they arrive.
+          // Claude's narration text → shown at default level (user sees progress)
+          // Tool calls → verbose level (hidden unless user toggles verbose)
+          let lineBuffer = '';
+          let lastProgressTime = 0;
+          const HEARTBEAT_INTERVAL = 30000; // 30s heartbeat if no text output
+
+          const onStdout = currentAgent.commands?.getMessageContent
+            ? (chunk: string) => {
+                lineBuffer += chunk;
+                const lines = lineBuffer.split('\n');
+                lineBuffer = lines.pop()!; // keep incomplete line
+                for (const line of lines) {
+                  if (!line.trim()) continue;
+                  try {
+                    const event = JSON.parse(line);
+                    if (event.type === 'assistant') {
+                      const content = event.message?.content;
+                      if (!Array.isArray(content)) continue;
+
+                      for (const block of content) {
+                        let streamContent: string | undefined;
+                        let level: 'default' | 'verbose' = 'verbose';
+
+                        if (block.type === 'text' && block.text) {
+                          // Claude's narration — show to user
+                          streamContent = block.text;
+                          level = 'default';
+                          lastProgressTime = Date.now();
+                        } else if (block.type === 'tool_use') {
+                          // Tool calls — verbose only
+                          const name = block.name || 'tool';
+                          if (name === 'Bash') {
+                            streamContent = `\`$ ${block.input?.command || ''}\``;
+                          } else if (name === 'Edit' || name === 'Write') {
+                            streamContent = `\`[${name}] ${block.input?.file_path || ''}\``;
+                          } else if (name === 'Agent') {
+                            streamContent = `\`[Subagent] ${block.input?.description || ''}\``;
+                          } else if (name === 'Read' || name === 'Glob' || name === 'Grep') {
+                            streamContent = `\`[${name}] ${block.input?.pattern || block.input?.file_path || ''}\``;
+                          }
+                        }
+
+                        if (streamContent) {
+                          const streamMsg: CommandLogMessage = {
+                            id: crypto.randomUUID(),
+                            messageId: userMsg.id,
+                            role: 'log',
+                            content: streamContent,
+                            stderr: '',
+                            timestamp: new Date().toISOString(),
+                            command: 'stream',
+                            cwd: executionCwd,
+                            exitCode: 0,
+                            level,
+                          };
+                          appendMessage(chatId, streamMsg).catch(() => {});
+                        }
+                      }
+                    } else if (event.type === 'system' && event.subtype === 'task_progress') {
+                      // Subagent progress — emit heartbeat if it's been quiet
+                      const now = Date.now();
+                      if (now - lastProgressTime > HEARTBEAT_INTERVAL) {
+                        lastProgressTime = now;
+                        const desc = event.description || 'working...';
+                        const streamMsg: CommandLogMessage = {
+                          id: crypto.randomUUID(),
+                          messageId: userMsg.id,
+                          role: 'log',
+                          content: `⏳ ${desc}`,
+                          stderr: '',
+                          timestamp: new Date().toISOString(),
+                          command: 'stream',
+                          cwd: executionCwd,
+                          exitCode: 0,
+                          level: 'default' as const,
+                        };
+                        appendMessage(chatId, streamMsg).catch(() => {});
+                      }
+                    }
+                  } catch {
+                    // Not valid JSON, skip
+                  }
+                }
+              }
+            : undefined;
+
           try {
-            mainResult = await runCommand({ command, cwd: executionCwd, env, signal });
+            mainResult = await runCommand({
+              command,
+              cwd: executionCwd,
+              env,
+              signal,
+              ...(onStdout ? { onStdout } : {}),
+            });
           } finally {
             clearInterval(typingInterval);
           }
