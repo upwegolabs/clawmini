@@ -130,17 +130,29 @@ async function runExtractionCommand(
 ): Promise<{ result?: string; error?: string }> {
   try {
     console.log(`Executing extraction command (${name}): ${command}`);
-    const res = await runCommand({
-      command,
-      cwd,
-      env,
-      stdin: mainResult.stdout,
-      signal,
-    });
-    if (res.exitCode === 0) {
-      return { result: res.stdout.trim() };
-    } else {
-      return { error: `${name} failed: ${res.stderr}` };
+    // Add a 10-second timeout for extraction commands to prevent hangs
+    const timeoutController = new AbortController();
+    const timeout = setTimeout(() => timeoutController.abort(), 10000);
+    const combinedSignal = signal
+      ? AbortSignal.any([signal, timeoutController.signal])
+      : timeoutController.signal;
+    try {
+      const res = await runCommand({
+        command,
+        cwd,
+        env,
+        stdin: mainResult.stdout,
+        signal: combinedSignal,
+      });
+      clearTimeout(timeout);
+      if (res.exitCode === 0) {
+        return { result: res.stdout.trim() };
+      } else {
+        return { error: `${name} failed: ${res.stderr}` };
+      }
+    } catch (e) {
+      clearTimeout(timeout);
+      throw e;
     }
   } catch (e) {
     return { error: `${name} error: ${(e as Error).message}` };

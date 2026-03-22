@@ -12,8 +12,19 @@ export class Queue<TPayload = string> {
   private isRunning = false;
   private currentController: AbortController | null = null;
   private currentPayload?: TPayload | undefined;
+  private taskStartTime: number = 0;
+  private static readonly STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
 
   enqueue(task: Task, payload?: TPayload): Promise<void> {
+    // Auto-recovery: if the queue has been "running" for too long, it's stuck
+    if (this.isRunning && this.taskStartTime > 0) {
+      const elapsed = Date.now() - this.taskStartTime;
+      if (elapsed > Queue.STUCK_THRESHOLD_MS) {
+        console.error(`[queue] Task running for ${Math.round(elapsed / 1000)}s — force-resetting stuck queue`);
+        this.forceReset();
+      }
+    }
+
     return new Promise((resolve, reject) => {
       this.pending.push({ task, payload, resolve, reject });
       // We don't await processNext because we want enqueue to return the task's promise
@@ -26,6 +37,7 @@ export class Queue<TPayload = string> {
     if (this.isRunning || this.pending.length === 0) return;
 
     this.isRunning = true;
+    this.taskStartTime = Date.now();
     const entry = this.pending.shift()!;
     this.currentController = new AbortController();
     this.currentPayload = entry.payload;
@@ -42,6 +54,26 @@ export class Queue<TPayload = string> {
       // Continue processing the next item
       this.processNext().catch(() => {});
     }
+  }
+
+  /**
+   * Force-reset the queue if it's stuck (e.g., after a process was killed externally).
+   * Rejects any pending tasks and allows new tasks to be processed.
+   */
+  forceReset(): void {
+    if (this.isRunning) {
+      console.error('[queue] Force-resetting stuck queue');
+      this.isRunning = false;
+      if (this.currentController) {
+        const error = new Error('Queue force-reset');
+        error.name = 'AbortError';
+        this.currentController.abort(error);
+      }
+      this.currentController = null;
+      this.currentPayload = undefined;
+    }
+    // Process next if anything is pending
+    this.processNext().catch(() => {});
   }
 
   abortCurrent(predicate?: (payload: TPayload) => boolean): void {
