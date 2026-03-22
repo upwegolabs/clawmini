@@ -424,6 +424,22 @@ export async function executeDirectMessage(
           }
 
           console.log(`Executing command: ${command}`);
+
+          // Immediate acknowledgment so the user knows we're working
+          const ackMsg: CommandLogMessage = {
+            id: crypto.randomUUID(),
+            messageId: userMsg.id,
+            role: 'log',
+            content: '⏳ Working on it...',
+            stderr: '',
+            timestamp: new Date().toISOString(),
+            command: 'ack',
+            cwd: executionCwd,
+            exitCode: 0,
+            level: 'default',
+          };
+          await appendMessage(chatId, ackMsg);
+
           let mainResult;
           const typingInterval = setInterval(() => {
             emitTyping(chatId);
