@@ -302,6 +302,7 @@ export async function executeDirectMessage(
 
       let lastLogMsg: CommandLogMessage | undefined;
       let success = false;
+      let didStream = false;
 
       for (let configIdx = 0; configIdx < executionConfigs.length; configIdx++) {
         const config = executionConfigs[configIdx]!;
@@ -455,6 +456,7 @@ export async function executeDirectMessage(
 
           const onStdout = currentAgent.commands?.getMessageContent
             ? (chunk: string) => {
+                didStream = true;
                 lineBuffer += chunk;
                 const lines = lineBuffer.split('\n');
                 lineBuffer = lines.pop()!; // keep incomplete line
@@ -632,6 +634,12 @@ export async function executeDirectMessage(
       }
 
       if (lastLogMsg) {
+        if (didStream) {
+          // Streaming was active — the user already saw incremental updates.
+          // Write the final entry as verbose to avoid duplicate display,
+          // but still record it for session extraction (getSessionId).
+          lastLogMsg.level = 'verbose';
+        }
         await appendMessage(chatId, lastLogMsg);
       }
     },
