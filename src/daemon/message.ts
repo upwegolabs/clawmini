@@ -190,6 +190,9 @@ function formatEnvironmentPrefix(
   );
 }
 
+// Track active command executions per chat to prevent duplicate spawns
+const activeExecutions = new Set<string>();
+
 export async function executeDirectMessage(
   chatId: string,
   state: RouterState,
@@ -424,6 +427,14 @@ export async function executeDirectMessage(
             }
           }
 
+          // Prevent duplicate command spawns for the same chat
+          const execKey = `${chatId}:${agentId}`;
+          if (activeExecutions.has(execKey)) {
+            console.error(`[message] Skipping duplicate execution for ${execKey}`);
+            continue;
+          }
+          activeExecutions.add(execKey);
+
           console.log(`Executing command: ${command}`);
 
           // Immediate acknowledgment so the user knows we're working
@@ -546,6 +557,7 @@ export async function executeDirectMessage(
             });
           } finally {
             clearInterval(typingInterval);
+            activeExecutions.delete(execKey);
           }
 
           const logMsg: CommandLogMessage = {
